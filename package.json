@@ -9,8 +9,7 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/cli.js",
-    "dev": "ts-node src/cli.ts",
-    "prepublishOnly": "npm run build"
+    "dev": "ts-node src/cli.ts"
   },
   "keywords": ["terminal", "mobile", "voice", "whisper", "telegram", "tmux"],
   "author": "",
