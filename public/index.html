@@ -1,0 +1,1432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0f0f1a">
+  <title>tmate mobile</title>
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.min.js"></script>
+
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      background: #0f0f1a;
+      color: #e0e0e0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      font-size: 16px;
+      -webkit-text-size-adjust: 100%;
+    }
+
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      height: 100dvh;
+    }
+
+    /* --- Status Bar --- */
+    #status-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 12px;
+      background: #161625;
+      border-bottom: 1px solid #2a2a40;
+      min-height: 36px;
+      flex-shrink: 0;
+    }
+
+    .status-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #ef4444;
+      flex-shrink: 0;
+      transition: background 0.3s;
+    }
+
+    .status-dot.connected { background: #22c55e; }
+
+    .status-text {
+      font-size: 12px;
+      color: #888;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .status-right {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .icon-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 28px;
+      border-radius: 6px;
+      border: 1px solid #2a2a40;
+      background: transparent;
+      color: #888;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .icon-btn:hover, .icon-btn:active {
+      background: #2a2a40;
+      color: #e0e0e0;
+    }
+
+    .icon-btn.active {
+      background: #3b82f6;
+      border-color: #3b82f6;
+      color: white;
+    }
+
+    /* --- Terminal --- */
+    #terminal-container {
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+    }
+
+    #terminal-container .xterm {
+      height: 100%;
+      padding: 2px;
+    }
+
+    /* --- Quick Keys --- */
+    #quick-keys {
+      display: flex;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      scrollbar-width: none;
+      background: #161625;
+      border-top: 1px solid #2a2a40;
+      padding: 4px;
+      gap: 4px;
+      flex-shrink: 0;
+      transition: max-height 0.2s, opacity 0.2s, padding 0.2s;
+      max-height: 48px;
+      opacity: 1;
+    }
+
+    #quick-keys::-webkit-scrollbar { display: none; }
+
+    #quick-keys.hidden {
+      max-height: 0;
+      opacity: 0;
+      padding: 0 4px;
+      overflow: hidden;
+    }
+
+    .qkey {
+      flex-shrink: 0;
+      padding: 6px 12px;
+      background: #1e1e35;
+      color: #ccc;
+      border: 1px solid #2a2a45;
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+      white-space: nowrap;
+      transition: background 0.1s;
+    }
+
+    .qkey:active { background: #2a2a45; }
+    .qkey.danger { background: #451a1a; border-color: #6b2a2a; }
+    .qkey.danger:active { background: #6b2a2a; }
+    .qkey.enter { background: #1a3a2a; border-color: #2a5a3a; }
+    .qkey.enter:active { background: #2a5a3a; }
+    .qkey.modifier { background: #251a45; border-color: #3a2a65; }
+    .qkey.modifier:active { background: #3a2a65; }
+    .qkey.modifier.active { background: #5a3a95; border-color: #7a5ab5; }
+
+    /* --- Toolbar --- */
+    #toolbar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 8px;
+      padding-bottom: max(6px, env(safe-area-inset-bottom));
+      background: #161625;
+      border-top: 1px solid #2a2a40;
+      flex-shrink: 0;
+    }
+
+    .tool-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      border: 1px solid #2a2a45;
+      background: #1e1e35;
+      color: #ccc;
+      font-size: 18px;
+      cursor: pointer;
+      user-select: none;
+      flex-shrink: 0;
+      transition: all 0.15s;
+    }
+
+    .tool-btn:active { background: #2a2a45; }
+
+    .tool-btn.recording {
+      background: #ef4444;
+      border-color: #dc2626;
+      animation: pulse-record 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse-record {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+      50% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+    }
+
+    #text-input {
+      flex: 1;
+      height: 40px;
+      padding: 8px 12px;
+      background: #0a0a15;
+      color: #e0e0e0;
+      border: 1px solid #2a2a45;
+      border-radius: 10px;
+      font-size: 16px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      outline: none;
+      -webkit-appearance: none;
+    }
+
+    #text-input:focus { border-color: #3b82f6; }
+
+    #send-btn.has-text {
+      background: #3b82f6;
+      border-color: #3b82f6;
+      color: white;
+    }
+
+    /* --- Settings Panel --- */
+    #settings-panel {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: #0f0f1a;
+      z-index: 500;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    #settings-panel.visible { display: block; }
+
+    .settings-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid #2a2a40;
+      position: sticky;
+      top: 0;
+      background: #0f0f1a;
+      z-index: 1;
+    }
+
+    .settings-header h2 {
+      font-size: 18px;
+      font-weight: 600;
+      color: #e0e0e0;
+    }
+
+    .settings-close {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      border: 1px solid #2a2a40;
+      background: transparent;
+      color: #888;
+      font-size: 20px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .settings-close:active { background: #2a2a40; }
+
+    .settings-body {
+      padding: 16px;
+      max-width: 500px;
+      margin: 0 auto;
+    }
+
+    .settings-section {
+      margin-bottom: 28px;
+    }
+
+    .settings-section h3 {
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #666;
+      margin-bottom: 12px;
+    }
+
+    .settings-card {
+      background: #161625;
+      border: 1px solid #2a2a40;
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    .settings-card p {
+      font-size: 14px;
+      color: #999;
+      line-height: 1.5;
+      margin-bottom: 12px;
+    }
+
+    .settings-card label {
+      display: block;
+      font-size: 13px;
+      color: #888;
+      margin-bottom: 6px;
+    }
+
+    .settings-input {
+      width: 100%;
+      padding: 10px 12px;
+      background: #0a0a15;
+      color: #e0e0e0;
+      border: 1px solid #2a2a45;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      outline: none;
+    }
+
+    .settings-input:focus { border-color: #3b82f6; }
+
+    .settings-input::placeholder { color: #444; }
+
+    .settings-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 20px;
+      border-radius: 8px;
+      border: none;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      margin-top: 12px;
+    }
+
+    .settings-btn.primary {
+      background: #3b82f6;
+      color: white;
+    }
+
+    .settings-btn.primary:active { background: #2563eb; }
+
+    .settings-btn.danger {
+      background: #451a1a;
+      color: #ef4444;
+      border: 1px solid #6b2a2a;
+    }
+
+    .settings-btn.danger:active { background: #6b2a2a; }
+
+    .settings-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* --- Telegram code display --- */
+    .tg-code-display {
+      display: none;
+      margin-top: 16px;
+      text-align: center;
+    }
+
+    .tg-code-display.visible { display: block; }
+
+    .tg-code-label {
+      font-size: 13px;
+      color: #888;
+      margin-bottom: 8px;
+    }
+
+    .tg-code {
+      font-size: 36px;
+      font-weight: 700;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      letter-spacing: 0.15em;
+      color: #3b82f6;
+      background: #1a1a35;
+      border: 2px dashed #3b82f6;
+      border-radius: 12px;
+      padding: 16px 24px;
+      user-select: all;
+      margin-bottom: 8px;
+    }
+
+    .tg-code-hint {
+      font-size: 12px;
+      color: #666;
+      line-height: 1.5;
+    }
+
+    .tg-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 12px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+    }
+
+    .tg-status.waiting {
+      background: #1a1a35;
+      color: #3b82f6;
+      border: 1px solid #2a2a55;
+    }
+
+    .tg-status.connected {
+      background: #1a3525;
+      color: #22c55e;
+      border: 1px solid #2a5535;
+    }
+
+    .tg-status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .tg-status.waiting .tg-status-dot {
+      background: #3b82f6;
+      animation: pulse-dot 1.5s ease-in-out infinite;
+    }
+
+    .tg-status.connected .tg-status-dot { background: #22c55e; }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    /* --- Voice/Recording overlays (same as before) --- */
+    #voice-preview {
+      display: none;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #161625;
+      border-top: 2px solid #3b82f6;
+      padding: 12px;
+      z-index: 100;
+      animation: slide-up 0.2s ease;
+    }
+
+    @keyframes slide-up {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+
+    #voice-preview.visible { display: block; }
+
+    #voice-text {
+      width: 100%;
+      min-height: 60px;
+      max-height: 120px;
+      padding: 10px;
+      background: #0a0a15;
+      color: #e0e0e0;
+      border: 1px solid #2a2a45;
+      border-radius: 8px;
+      font-size: 15px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      resize: none;
+      outline: none;
+      margin-bottom: 8px;
+    }
+
+    #voice-text:focus { border-color: #3b82f6; }
+
+    .voice-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .voice-actions button {
+      flex: 1;
+      padding: 10px;
+      border-radius: 8px;
+      border: none;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    #voice-cancel { background: #2a2a40; color: #ccc; }
+    #voice-send { background: #3b82f6; color: white; }
+    #voice-send-enter { background: #22c55e; color: white; }
+
+    #recording-overlay, #transcribing-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.8);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+    }
+
+    #recording-overlay.visible, #transcribing-overlay.visible { display: flex; }
+
+    .record-circle {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      background: #ef4444;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 36px;
+      cursor: pointer;
+      animation: pulse-big 1.5s ease-in-out infinite;
+      user-select: none;
+    }
+
+    @keyframes pulse-big {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+      50% { transform: scale(1.05); box-shadow: 0 0 0 20px rgba(239, 68, 68, 0); }
+    }
+
+    .record-timer {
+      margin-top: 16px;
+      font-size: 20px;
+      font-variant-numeric: tabular-nums;
+      color: #e0e0e0;
+    }
+
+    .record-hint {
+      margin-top: 8px;
+      font-size: 13px;
+      color: #666;
+    }
+
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid #2a2a45;
+      border-top-color: #3b82f6;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .transcribing-text {
+      margin-top: 16px;
+      font-size: 15px;
+      color: #e0e0e0;
+    }
+
+    /* --- Disconnect banner --- */
+    #disconnect-banner {
+      display: none;
+      position: fixed;
+      top: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #ef4444;
+      color: white;
+      padding: 8px 20px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      z-index: 300;
+      cursor: pointer;
+    }
+
+    #disconnect-banner.visible { display: block; }
+
+    /* --- Steps visual --- */
+    .steps-list {
+      list-style: none;
+      padding: 0;
+      margin: 12px 0 0 0;
+    }
+
+    .steps-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 8px 0;
+      font-size: 14px;
+      color: #ccc;
+      line-height: 1.5;
+    }
+
+    .step-num {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #2a2a45;
+      color: #888;
+      font-size: 12px;
+      font-weight: 700;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .step-num.done {
+      background: #22c55e;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="status-bar">
+      <div class="status-left">
+        <div class="status-dot" id="status-dot"></div>
+        <span class="status-text" id="status-text">Connecting...</span>
+      </div>
+      <div class="status-right">
+        <button class="icon-btn" id="toggle-keys" title="Quick keys">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="6" y1="8" x2="6" y2="8"/><line x1="10" y1="8" x2="10" y2="8"/><line x1="14" y1="8" x2="14" y2="8"/><line x1="18" y1="8" x2="18" y2="8"/><line x1="8" y1="12" x2="8" y2="12"/><line x1="12" y1="12" x2="12" y2="12"/><line x1="16" y1="12" x2="16" y2="12"/><line x1="7" y1="16" x2="17" y2="16"/></svg>
+        </button>
+        <button class="icon-btn" id="settings-btn" title="Settings">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div id="terminal-container"></div>
+
+    <div id="quick-keys">
+      <button class="qkey enter" data-key="Enter">Enter</button>
+      <button class="qkey" data-key="ArrowUp">&uarr;</button>
+      <button class="qkey" data-key="ArrowDown">&darr;</button>
+      <button class="qkey danger" data-special="C-c">Ctrl+C</button>
+      <button class="qkey" data-key="Backspace">&#9003;</button>
+      <button class="qkey" data-key="Escape">Esc</button>
+      <button class="qkey" data-key="Tab">Tab</button>
+      <button class="qkey modifier" data-mod="ctrl" id="ctrl-key">Ctrl</button>
+      <button class="qkey" data-key="/">/</button>
+      <button class="qkey" data-key="-">-</button>
+      <button class="qkey" data-key="_">_</button>
+      <button class="qkey" data-key="|">|</button>
+      <button class="qkey" data-key="~">~</button>
+      <button class="qkey" data-key="`">`</button>
+      <button class="qkey" data-key="ArrowLeft">&larr;</button>
+      <button class="qkey" data-key="ArrowRight">&rarr;</button>
+      <button class="qkey" data-key="Home">Home</button>
+      <button class="qkey" data-key="End">End</button>
+    </div>
+
+    <div id="toolbar">
+      <button class="tool-btn" id="mic-btn" title="Voice input">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+      </button>
+      <button class="tool-btn" id="paste-btn" title="Paste">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
+      </button>
+      <input type="text" id="text-input" placeholder="Type command..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="text" data-gramm="false">
+      <button class="tool-btn" id="send-btn" title="Send">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Settings Panel -->
+  <div id="settings-panel">
+    <div class="settings-header">
+      <h2>Settings</h2>
+      <button class="settings-close" id="settings-close">&times;</button>
+    </div>
+    <div class="settings-body">
+
+      <!-- Telegram Section -->
+      <div class="settings-section">
+        <h3>Telegram</h3>
+        <div class="settings-card" id="tg-card">
+          <p>Control this terminal from Telegram. Send commands, voice messages, get screenshots.</p>
+
+          <div id="tg-setup-form">
+            <ol class="steps-list" id="tg-steps">
+              <li>
+                <span class="step-num" id="step1-num">1</span>
+                <span>Open <strong>@BotFather</strong> in Telegram, send <code>/newbot</code>, and copy the token</span>
+              </li>
+              <li>
+                <span class="step-num" id="step2-num">2</span>
+                <span>Paste the token below and click Connect</span>
+              </li>
+              <li>
+                <span class="step-num" id="step3-num">3</span>
+                <span>Send the code to your bot in Telegram</span>
+              </li>
+            </ol>
+
+            <label for="tg-token-input" style="margin-top:16px">Bot Token</label>
+            <input type="text" class="settings-input" id="tg-token-input" placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz">
+            <button class="settings-btn primary" id="tg-connect-btn">Connect Bot</button>
+          </div>
+
+          <div class="tg-code-display" id="tg-code-display">
+            <div class="tg-code-label">Send this code to your bot:</div>
+            <div class="tg-code" id="tg-code-value">-----</div>
+            <a id="tg-deeplink" href="#" target="_blank" style="display:none;text-decoration:none;margin-top:12px;padding:12px 20px;background:#0088cc;color:white;border-radius:10px;font-size:15px;font-weight:600;text-align:center;width:100%;">Open Bot in Telegram</a>
+            <div class="tg-code-hint" id="tg-code-hint">Open your bot in Telegram and send this code as a message</div>
+          </div>
+
+          <div class="tg-status waiting" id="tg-status-waiting" style="display:none">
+            <span class="tg-status-dot"></span>
+            <span>Waiting for Telegram connection...</span>
+          </div>
+
+          <div class="tg-status connected" id="tg-status-connected" style="display:none">
+            <span class="tg-status-dot"></span>
+            <span>Telegram connected!</span>
+          </div>
+
+          <button class="settings-btn danger" id="tg-disconnect-btn" style="display:none">Disconnect Bot</button>
+        </div>
+      </div>
+
+      <!-- Whisper Section -->
+      <div class="settings-section">
+        <h3>Voice Input</h3>
+        <div class="settings-card">
+          <p>Voice-to-text powered by Whisper. Tap the mic button to record.</p>
+          <div class="tg-status" id="whisper-status" style="background:#1a1a35;color:#888;border:1px solid #2a2a45">
+            <span class="tg-status-dot" id="whisper-dot" style="background:#888"></span>
+            <span id="whisper-status-text">Checking...</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- About -->
+      <div class="settings-section">
+        <h3>About</h3>
+        <div class="settings-card">
+          <p style="margin-bottom:0">
+            <strong>tmate mobile</strong> — mobile terminal access with voice input.
+            Run a command, get a link, control your server from your phone.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recording Overlay -->
+  <div id="recording-overlay">
+    <div class="record-circle" id="stop-record-btn">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="white" stroke="none"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+    </div>
+    <div class="record-timer" id="record-timer">0:00</div>
+    <div class="record-hint">Tap to stop recording</div>
+  </div>
+
+  <!-- Transcribing Overlay -->
+  <div id="transcribing-overlay">
+    <div class="spinner"></div>
+    <div class="transcribing-text">Transcribing...</div>
+  </div>
+
+  <!-- Voice Preview -->
+  <div id="voice-preview">
+    <textarea id="voice-text" rows="3" placeholder="Transcribed text..."></textarea>
+    <div class="voice-actions">
+      <button id="voice-cancel">Cancel</button>
+      <button id="voice-send">Send</button>
+      <button id="voice-send-enter">Send + Enter</button>
+    </div>
+  </div>
+
+  <!-- Disconnect Banner -->
+  <div id="disconnect-banner">Disconnected. Tap to reconnect.</div>
+
+  <script>
+    (function() {
+      'use strict';
+
+      // --- DOM refs ---
+      const terminalContainer = document.getElementById('terminal-container');
+      const statusDot = document.getElementById('status-dot');
+      const statusText = document.getElementById('status-text');
+      const textInput = document.getElementById('text-input');
+      const sendBtn = document.getElementById('send-btn');
+      const pasteBtn = document.getElementById('paste-btn');
+      const micBtn = document.getElementById('mic-btn');
+      const toggleKeysBtn = document.getElementById('toggle-keys');
+      const quickKeys = document.getElementById('quick-keys');
+      const recordingOverlay = document.getElementById('recording-overlay');
+      const stopRecordBtn = document.getElementById('stop-record-btn');
+      const recordTimer = document.getElementById('record-timer');
+      const transcribingOverlay = document.getElementById('transcribing-overlay');
+      const voicePreview = document.getElementById('voice-preview');
+      const voiceText = document.getElementById('voice-text');
+      const voiceCancel = document.getElementById('voice-cancel');
+      const voiceSend = document.getElementById('voice-send');
+      const voiceSendEnter = document.getElementById('voice-send-enter');
+      const disconnectBanner = document.getElementById('disconnect-banner');
+      const settingsBtn = document.getElementById('settings-btn');
+      const settingsPanel = document.getElementById('settings-panel');
+      const settingsClose = document.getElementById('settings-close');
+
+      // Telegram refs
+      const tgTokenInput = document.getElementById('tg-token-input');
+      const tgConnectBtn = document.getElementById('tg-connect-btn');
+      const tgCodeDisplay = document.getElementById('tg-code-display');
+      const tgCodeValue = document.getElementById('tg-code-value');
+      const tgStatusWaiting = document.getElementById('tg-status-waiting');
+      const tgStatusConnected = document.getElementById('tg-status-connected');
+      const tgDisconnectBtn = document.getElementById('tg-disconnect-btn');
+      const tgSetupForm = document.getElementById('tg-setup-form');
+      const tgDeeplink = document.getElementById('tg-deeplink');
+      const tgCodeHint = document.getElementById('tg-code-hint');
+
+      // --- Derive paths ---
+      const currentPath = window.location.pathname;
+      const pathMatch = currentPath.match(/\/s\/([^/]+)/);
+      const secret = pathMatch ? pathMatch[1] : '';
+      const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${wsProto}//${window.location.host}/ws/${secret}`;
+      const apiBase = `${window.location.protocol}//${window.location.host}/api/${secret}`;
+
+      // --- State ---
+      let ws = null;
+      let term = null;
+      let fitAddon = null;
+      let ctrlActive = false;
+      let mediaRecorder = null;
+      let audioChunks = [];
+      let recordingStartTime = null;
+      let recordTimerInterval = null;
+      let reconnectTimeout = null;
+
+      // --- Settings ---
+      settingsBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        settingsPanel.classList.add('visible');
+        checkTelegramStatus();
+        checkWhisperStatus();
+      });
+
+      settingsClose.addEventListener('click', (e) => {
+        e.preventDefault();
+        settingsPanel.classList.remove('visible');
+        setTimeout(handleResize, 100);
+      });
+
+      // --- Telegram setup ---
+      let tgPollInterval = null;
+
+      tgConnectBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const token = tgTokenInput.value.trim();
+        if (!token) return;
+
+        tgConnectBtn.disabled = true;
+        tgConnectBtn.textContent = 'Connecting...';
+
+        try {
+          const resp = await fetch(`${apiBase}/telegram/setup`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token }),
+          });
+
+          const data = await resp.json();
+
+          if (data.error) {
+            alert('Error: ' + data.error);
+            tgConnectBtn.disabled = false;
+            tgConnectBtn.textContent = 'Connect Bot';
+            return;
+          }
+
+          // Show code
+          tgCodeValue.textContent = data.code;
+          tgCodeDisplay.classList.add('visible');
+          tgStatusWaiting.style.display = 'flex';
+          tgDisconnectBtn.style.display = 'inline-flex';
+          tgTokenInput.style.display = 'none';
+          tgConnectBtn.style.display = 'none';
+
+          // Mark steps
+          document.getElementById('step1-num').classList.add('done');
+          document.getElementById('step1-num').textContent = '\u2713';
+          document.getElementById('step2-num').classList.add('done');
+          document.getElementById('step2-num').textContent = '\u2713';
+
+          // Poll for connection
+          startTgPoll();
+        } catch (err) {
+          alert('Failed to connect: ' + err.message);
+          tgConnectBtn.disabled = false;
+          tgConnectBtn.textContent = 'Connect Bot';
+        }
+      });
+
+      tgDisconnectBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        try {
+          await fetch(`${apiBase}/telegram/disconnect`, { method: 'POST' });
+        } catch {}
+        resetTgUI();
+      });
+
+      function updateDeeplink(botUsername, code) {
+        if (botUsername && code) {
+          tgDeeplink.href = `https://t.me/${botUsername}?start=${code}`;
+          tgDeeplink.style.display = 'block';
+          tgCodeHint.style.display = 'none';
+        }
+      }
+
+      function startTgPoll() {
+        if (tgPollInterval) clearInterval(tgPollInterval);
+        tgPollInterval = setInterval(async () => {
+          try {
+            const resp = await fetch(`${apiBase}/telegram/status`);
+            const data = await resp.json();
+            if (data.botUsername) updateDeeplink(data.botUsername, data.code);
+            if (data.connected) {
+              tgStatusWaiting.style.display = 'none';
+              tgStatusConnected.style.display = 'flex';
+              document.getElementById('step3-num').classList.add('done');
+              document.getElementById('step3-num').textContent = '\u2713';
+              clearInterval(tgPollInterval);
+              tgPollInterval = null;
+            }
+          } catch {}
+        }, 2000);
+      }
+
+      async function checkTelegramStatus() {
+        try {
+          const resp = await fetch(`${apiBase}/telegram/status`);
+          const data = await resp.json();
+          if (data.active) {
+            tgCodeValue.textContent = data.code || '-----';
+            tgCodeDisplay.classList.add('visible');
+            tgTokenInput.style.display = 'none';
+            tgConnectBtn.style.display = 'none';
+            tgDisconnectBtn.style.display = 'inline-flex';
+            if (data.botUsername) updateDeeplink(data.botUsername, data.code);
+
+            document.getElementById('step1-num').classList.add('done');
+            document.getElementById('step1-num').textContent = '\u2713';
+            document.getElementById('step2-num').classList.add('done');
+            document.getElementById('step2-num').textContent = '\u2713';
+
+            if (data.connected) {
+              tgStatusWaiting.style.display = 'none';
+              tgStatusConnected.style.display = 'flex';
+              document.getElementById('step3-num').classList.add('done');
+              document.getElementById('step3-num').textContent = '\u2713';
+            } else {
+              tgStatusWaiting.style.display = 'flex';
+              tgStatusConnected.style.display = 'none';
+              startTgPoll();
+            }
+          }
+        } catch {}
+      }
+
+      function resetTgUI() {
+        if (tgPollInterval) { clearInterval(tgPollInterval); tgPollInterval = null; }
+        tgCodeDisplay.classList.remove('visible');
+        tgStatusWaiting.style.display = 'none';
+        tgStatusConnected.style.display = 'none';
+        tgDisconnectBtn.style.display = 'none';
+        tgDeeplink.style.display = 'none';
+        tgCodeHint.style.display = '';
+        tgTokenInput.style.display = '';
+        tgTokenInput.value = '';
+        tgConnectBtn.style.display = '';
+        tgConnectBtn.disabled = false;
+        tgConnectBtn.textContent = 'Connect Bot';
+        ['step1-num','step2-num','step3-num'].forEach((id, i) => {
+          const el = document.getElementById(id);
+          el.classList.remove('done');
+          el.textContent = String(i + 1);
+        });
+      }
+
+      // --- Whisper status ---
+      let whisperReady = false;
+
+      async function checkWhisperStatus() {
+        try {
+          const resp = await fetch(`${apiBase}/whisper-status`);
+          const data = await resp.json();
+          whisperReady = data.ready;
+          const dot = document.getElementById('whisper-dot');
+          const txt = document.getElementById('whisper-status-text');
+          if (data.ready) {
+            dot.style.background = '#22c55e';
+            txt.textContent = 'Whisper ready';
+            micBtn.style.opacity = '1';
+          } else if (data.loading) {
+            dot.style.background = '#f59e0b';
+            txt.textContent = 'Loading model...';
+            micBtn.style.opacity = '0.5';
+          } else {
+            dot.style.background = '#888';
+            txt.textContent = 'Not loaded';
+            micBtn.style.opacity = '0.5';
+          }
+        } catch {}
+      }
+      checkWhisperStatus();
+      setInterval(checkWhisperStatus, 10000);
+
+      // --- Terminal setup ---
+      function initTerminal() {
+        if (term) term.dispose();
+
+        term = new Terminal({
+          cursorBlink: true,
+          cursorStyle: 'bar',
+          fontSize: 14,
+          fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', 'JetBrains Mono', 'Courier New', monospace",
+          theme: {
+            background: '#0f0f1a',
+            foreground: '#e0e0e0',
+            cursor: '#3b82f6',
+            selectionBackground: '#3b82f666',
+            black: '#0f0f1a',
+            red: '#ef4444',
+            green: '#22c55e',
+            yellow: '#f59e0b',
+            blue: '#3b82f6',
+            magenta: '#a855f7',
+            cyan: '#06b6d4',
+            white: '#e0e0e0',
+            brightBlack: '#6b7280',
+            brightRed: '#ef4444',
+            brightGreen: '#22c55e',
+            brightYellow: '#fbbf24',
+            brightBlue: '#60a5fa',
+            brightMagenta: '#c084fc',
+            brightCyan: '#22d3ee',
+            brightWhite: '#ffffff',
+          },
+          allowProposedApi: true,
+          scrollback: 5000,
+          convertEol: true,
+        });
+
+        fitAddon = new FitAddon.FitAddon();
+        const webLinksAddon = new WebLinksAddon.WebLinksAddon();
+        term.loadAddon(fitAddon);
+        term.loadAddon(webLinksAddon);
+        term.open(terminalContainer);
+        fitAddon.fit();
+
+        const xtermToTmux = {
+          '\r': 'Enter', '\t': 'Tab', '\x1b': 'Escape',
+          '\x1b[A': 'Up', '\x1b[B': 'Down', '\x1b[C': 'Right', '\x1b[D': 'Left',
+          '\x1b[H': 'Home', '\x1b[F': 'End', '\x7f': 'BSpace', '\x1b[3~': 'DC',
+        };
+
+        term.onData((data) => {
+          if (xtermToTmux[data]) {
+            wsSend({ type: 'special', data: xtermToTmux[data] });
+          } else if (data.length === 1 && data.charCodeAt(0) < 32) {
+            const letter = String.fromCharCode(data.charCodeAt(0) + 96);
+            wsSend({ type: 'special', data: 'C-' + letter });
+          } else {
+            wsSend({ type: 'input', data });
+          }
+        });
+
+        term.onResize(({ cols, rows }) => {
+          wsSend({ type: 'resize', cols, rows });
+        });
+      }
+
+      // --- WebSocket ---
+      function connect() {
+        if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) return;
+
+        statusDot.className = 'status-dot';
+        statusText.textContent = 'Connecting...';
+        disconnectBanner.classList.remove('visible');
+
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+          statusDot.className = 'status-dot connected';
+          statusText.textContent = 'Connected';
+          if (fitAddon) {
+            fitAddon.fit();
+            const dims = fitAddon.proposeDimensions();
+            if (dims) wsSend({ type: 'resize', cols: dims.cols, rows: dims.rows });
+          }
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const msg = JSON.parse(event.data);
+            switch (msg.type) {
+              case 'screen':
+                if (term) {
+                  term.write('\x1b[2J\x1b[H');
+                  term.write(msg.data);
+                }
+                break;
+              case 'exit':
+                statusText.textContent = 'Session ended';
+                break;
+              case 'ready':
+                statusText.textContent = 'Connected';
+                break;
+            }
+          } catch {}
+        };
+
+        ws.onclose = () => {
+          statusDot.className = 'status-dot';
+          statusText.textContent = 'Disconnected';
+          disconnectBanner.classList.add('visible');
+          if (reconnectTimeout) clearTimeout(reconnectTimeout);
+          reconnectTimeout = setTimeout(connect, 3000);
+        };
+
+        ws.onerror = () => { ws.close(); };
+      }
+
+      function wsSend(data) {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify(data));
+        }
+      }
+
+      // --- Resize ---
+      function handleResize() {
+        if (fitAddon) fitAddon.fit();
+      }
+
+      window.addEventListener('resize', handleResize);
+      window.addEventListener('orientationchange', () => setTimeout(handleResize, 200));
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', () => setTimeout(handleResize, 100));
+      }
+
+      // --- Quick Keys ---
+      const specialKeyMap = {
+        'Enter': 'Enter', 'Tab': 'Tab', 'Escape': 'Escape',
+        'ArrowUp': 'Up', 'ArrowDown': 'Down', 'ArrowRight': 'Right', 'ArrowLeft': 'Left',
+        'Home': 'Home', 'End': 'End', 'Backspace': 'BSpace',
+      };
+
+      document.querySelectorAll('.qkey').forEach(btn => {
+        btn.addEventListener('touchend', handleQkey);
+        btn.addEventListener('click', handleQkey);
+
+        function handleQkey(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          const key = btn.dataset.key;
+          const mod = btn.dataset.mod;
+          const special = btn.dataset.special;
+
+          if (special) {
+            wsSend({ type: 'special', data: special });
+            btn.blur(); document.activeElement?.blur();
+            return;
+          }
+
+          if (mod === 'ctrl') {
+            ctrlActive = !ctrlActive;
+            btn.classList.toggle('active', ctrlActive);
+            btn.blur();
+            return;
+          }
+
+          if (ctrlActive && key && key.length === 1) {
+            wsSend({ type: 'special', data: 'C-' + key.toLowerCase() });
+            ctrlActive = false;
+            document.getElementById('ctrl-key').classList.remove('active');
+          } else if (specialKeyMap[key]) {
+            wsSend({ type: 'special', data: specialKeyMap[key] });
+          } else if (key) {
+            wsSend({ type: 'input', data: key });
+          }
+
+          btn.blur(); document.activeElement?.blur();
+        }
+      });
+
+      toggleKeysBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        quickKeys.classList.toggle('hidden');
+        setTimeout(handleResize, 250);
+      });
+
+      // --- Text Input ---
+      textInput.setAttribute('autocapitalize', 'off');
+
+      textInput.addEventListener('input', () => {
+        sendBtn.classList.toggle('has-text', textInput.value.length > 0);
+      });
+
+      function sendTextInput() {
+        const text = textInput.value;
+        if (text) {
+          wsSend({ type: 'input', data: text });
+          textInput.value = '';
+          sendBtn.classList.remove('has-text');
+        }
+      }
+
+      textInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const text = textInput.value;
+          if (text) {
+            wsSend({ type: 'input', data: text });
+            wsSend({ type: 'special', data: 'Enter' });
+            textInput.value = '';
+            sendBtn.classList.remove('has-text');
+          } else {
+            wsSend({ type: 'special', data: 'Enter' });
+          }
+        }
+      });
+
+      sendBtn.addEventListener('click', (e) => { e.preventDefault(); sendTextInput(); });
+
+      // --- Paste ---
+      pasteBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        try {
+          const text = await navigator.clipboard.readText();
+          if (text) wsSend({ type: 'input', data: text });
+        } catch {
+          textInput.focus();
+          textInput.value = '';
+          textInput.placeholder = 'Paste here, then Send';
+        }
+      });
+
+      // --- Voice Recording ---
+      let isRecording = false;
+
+      micBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        if (isRecording) return;
+
+        if (!whisperReady) {
+          alert('Whisper model is still loading. Please wait.');
+          return;
+        }
+
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true }
+          });
+
+          isRecording = true;
+          audioChunks = [];
+          micBtn.classList.add('recording');
+
+          let mimeType = 'audio/webm;codecs=opus';
+          if (MediaRecorder.isTypeSupported('audio/wav')) mimeType = 'audio/wav';
+
+          mediaRecorder = new MediaRecorder(stream, {
+            mimeType: MediaRecorder.isTypeSupported(mimeType) ? mimeType : undefined,
+          });
+
+          mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) audioChunks.push(e.data);
+          };
+
+          mediaRecorder.onstop = async () => {
+            stream.getTracks().forEach(t => t.stop());
+            micBtn.classList.remove('recording');
+            isRecording = false;
+            const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
+            await transcribeAudio(blob);
+          };
+
+          mediaRecorder.start(100);
+          recordingStartTime = Date.now();
+          recordingOverlay.classList.add('visible');
+          updateRecordTimer();
+          recordTimerInterval = setInterval(updateRecordTimer, 100);
+        } catch (err) {
+          alert('Microphone access denied.');
+        }
+      });
+
+      function stopRecording() {
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+        recordingOverlay.classList.remove('visible');
+        if (recordTimerInterval) { clearInterval(recordTimerInterval); recordTimerInterval = null; }
+      }
+
+      stopRecordBtn.addEventListener('click', (e) => { e.preventDefault(); stopRecording(); });
+
+      function updateRecordTimer() {
+        if (!recordingStartTime) return;
+        const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
+        recordTimer.textContent = `${Math.floor(elapsed / 60)}:${(elapsed % 60).toString().padStart(2, '0')}`;
+      }
+
+      async function transcribeAudio(blob) {
+        transcribingOverlay.classList.add('visible');
+        try {
+          const wavBlob = await convertToWav(blob);
+          const base64 = await blobToBase64(wavBlob);
+          const resp = await fetch(`${apiBase}/transcribe`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ audio: base64 }),
+          });
+          const data = await resp.json();
+          transcribingOverlay.classList.remove('visible');
+          if (data.error) { alert('Transcription error: ' + data.error); return; }
+          if (data.text) showVoicePreview(data.text);
+        } catch (err) {
+          transcribingOverlay.classList.remove('visible');
+          alert('Transcription failed: ' + err.message);
+        }
+      }
+
+      async function convertToWav(blob) {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+        const arrayBuffer = await blob.arrayBuffer();
+        const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+        const length = audioBuffer.length;
+        const buffer = new ArrayBuffer(44 + length * 2);
+        const view = new DataView(buffer);
+        const channelData = audioBuffer.getChannelData(0);
+
+        writeString(view, 0, 'RIFF');
+        view.setUint32(4, 36 + length * 2, true);
+        writeString(view, 8, 'WAVE');
+        writeString(view, 12, 'fmt ');
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true);
+        view.setUint16(22, 1, true);
+        view.setUint32(24, 16000, true);
+        view.setUint32(28, 32000, true);
+        view.setUint16(32, 2, true);
+        view.setUint16(34, 16, true);
+        writeString(view, 36, 'data');
+        view.setUint32(40, length * 2, true);
+
+        let offset = 44;
+        for (let i = 0; i < length; i++) {
+          let sample = Math.max(-1, Math.min(1, channelData[i]));
+          sample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+          view.setInt16(offset, sample, true);
+          offset += 2;
+        }
+
+        audioCtx.close();
+        return new Blob([buffer], { type: 'audio/wav' });
+      }
+
+      function writeString(view, offset, string) {
+        for (let i = 0; i < string.length; i++) view.setUint8(offset + i, string.charCodeAt(i));
+      }
+
+      function blobToBase64(blob) {
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result.split(',')[1]);
+          reader.readAsDataURL(blob);
+        });
+      }
+
+      function showVoicePreview(text) {
+        voiceText.value = text;
+        voicePreview.classList.add('visible');
+        voiceText.focus();
+      }
+
+      voiceCancel.addEventListener('click', (e) => { e.preventDefault(); voicePreview.classList.remove('visible'); });
+
+      voiceSend.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (voiceText.value) wsSend({ type: 'input', data: voiceText.value });
+        voicePreview.classList.remove('visible');
+      });
+
+      voiceSendEnter.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (voiceText.value) {
+          wsSend({ type: 'input', data: voiceText.value });
+          wsSend({ type: 'special', data: 'Enter' });
+        }
+        voicePreview.classList.remove('visible');
+      });
+
+      disconnectBanner.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (reconnectTimeout) clearTimeout(reconnectTimeout);
+        connect();
+      });
+
+      setInterval(() => { wsSend({ type: 'ping' }); }, 30000);
+
+      // --- Init ---
+      initTerminal();
+      connect();
+
+      terminalContainer.addEventListener('click', () => {
+        if (term) term.focus();
+      });
+    })();
+  </script>
+</body>
+</html>
