@@ -10,7 +10,8 @@
     "build": "tsc",
     "start": "node dist/cli.js",
     "dev": "ts-node src/cli.ts",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "postinstall": "node -e \"try{require('canvas')}catch(e){console.log('\\n  [whtyce] canvas not installed — Telegram screenshots disabled.\\n  To fix: apt install -y build-essential libcairo2-dev libjpeg-dev libpango1.0-dev libgif-dev librsvg2-dev && npm rebuild canvas\\n')}\""
   },
   "keywords": ["terminal", "mobile", "voice", "whisper", "telegram", "tmux"],
   "author": "",
@@ -22,10 +23,12 @@
   ],
   "dependencies": {
     "@xenova/transformers": "^2.17.2",
-    "canvas": "^3.2.1",
     "express": "^5.2.1",
     "node-telegram-bot-api": "^0.67.0",
     "ws": "^8.19.0"
+  },
+  "optionalDependencies": {
+    "canvas": "^3.2.1"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
