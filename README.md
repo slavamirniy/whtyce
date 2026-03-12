@@ -9,14 +9,7 @@ Mobile terminal with voice input. Run a command, get a link, control your server
 apt install -y tmux ffmpeg build-essential python3 libcairo2-dev libjpeg-dev libpango1.0-dev libgif-dev librsvg2-dev libvips-dev
 
 # Install whtyce
-npm install -g github:slavamirniy/whtyce
-```
-
-If sharp fails during install, run with `--ignore-scripts` and then install whisper separately:
-
-```bash
-npm install -g --ignore-scripts github:slavamirniy/whtyce
-cd $(npm root -g)/whtyce && npm install --ignore-scripts @xenova/transformers canvas
+npm install -g https://github.com/slavamirniy/whtyce/releases/download/v1.0.0/whtyce-1.0.0.tgz
 ```
 
 ## Usage
