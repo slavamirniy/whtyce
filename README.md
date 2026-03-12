@@ -5,7 +5,19 @@ Mobile terminal with voice input. Run a command, get a link, control your server
 ## Install
 
 ```bash
+# System dependencies (Ubuntu/Debian)
+apt install -y tmux build-essential libcairo2-dev libjpeg-dev libpango1.0-dev libgif-dev librsvg2-dev
+
+# Optional: ffmpeg for Telegram voice messages
+apt install -y ffmpeg
+
+# Install whtyce
 npm install -g github:slavamirniy/whtyce
+```
+
+One-liner:
+```bash
+apt install -y tmux ffmpeg build-essential libcairo2-dev libjpeg-dev libpango1.0-dev libgif-dev librsvg2-dev && npm install -g github:slavamirniy/whtyce
 ```
 
 ## Usage
@@ -64,9 +76,10 @@ When you stop whtyce (Ctrl+C), it prints the command to restart with the same se
 
 ## Requirements
 
-- Node.js 18+
-- tmux
-- ffmpeg (optional, for Telegram voice messages)
+- **Node.js 18+**
+- **tmux** — terminal multiplexer
+- **System libs for canvas** — `build-essential libcairo2-dev libjpeg-dev libpango1.0-dev libgif-dev librsvg2-dev` (needed for Telegram screenshots)
+- **ffmpeg** — optional, for Telegram voice messages
 
 ## How it works
 
