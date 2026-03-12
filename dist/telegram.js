@@ -5,15 +5,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TmateTelegramBot = void 0;
 const node_telegram_bot_api_1 = __importDefault(require("node-telegram-bot-api"));
+const canvas_1 = require("canvas");
 const child_process_1 = require("child_process");
-// Lazy import — canvas is optional
-let createCanvas = null;
-try {
-    createCanvas = require('canvas').createCanvas;
-}
-catch {
-    console.log('[telegram] canvas not available — install system deps for Telegram screenshots');
-}
 const fs_1 = __importDefault(require("fs"));
 const crypto_1 = __importDefault(require("crypto"));
 function stripAnsi(str) {
@@ -31,8 +24,6 @@ function capturePaneText(session) {
     }
 }
 function renderTerminalImage(text) {
-    if (!createCanvas)
-        return null;
     const lines = text.split('\n');
     const fontSize = 14;
     const lineHeight = 18;
@@ -42,7 +33,7 @@ function renderTerminalImage(text) {
     const maxLineLen = Math.max(...lines.map(l => l.length), 40);
     const width = Math.ceil(maxLineLen * charWidth + paddingX * 2);
     const height = Math.max(lines.length * lineHeight + paddingY * 2, 100);
-    const canvas = createCanvas(width, height);
+    const canvas = (0, canvas_1.createCanvas)(width, height);
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = '#1a1a2e';
     ctx.fillRect(0, 0, width, height);
@@ -232,8 +223,6 @@ class TmateTelegramBot {
             this.lastScreenContent = text;
             const chatId = this.authorizedChat;
             const imgBuf = renderTerminalImage(text);
-            if (!imgBuf)
-                return;
             if (this.screenMsgId) {
                 // Try to edit existing message
                 try {
@@ -286,8 +275,6 @@ class TmateTelegramBot {
             const text = stripAnsi(capturePaneText(this.config.tmuxSession));
             this.lastScreenContent = text;
             const imgBuf = renderTerminalImage(text);
-            if (!imgBuf)
-                return;
             const oldMsgId = this.screenMsgId;
             const sent = await this.bot.sendPhoto(chatId, imgBuf, {
                 reply_markup: this.getKeyboard(),

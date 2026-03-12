@@ -1,13 +1,6 @@
 import TelegramBot from 'node-telegram-bot-api';
+import { createCanvas } from 'canvas';
 import { execSync, spawn } from 'child_process';
-
-// Lazy import — canvas is optional
-let createCanvas: any = null;
-try {
-  createCanvas = require('canvas').createCanvas;
-} catch {
-  console.log('[telegram] canvas not available — install system deps for Telegram screenshots');
-}
 import fs from 'fs';
 import crypto from 'crypto';
 
@@ -34,8 +27,7 @@ function capturePaneText(session: string): string {
   }
 }
 
-function renderTerminalImage(text: string): Buffer | null {
-  if (!createCanvas) return null;
+function renderTerminalImage(text: string): Buffer {
   const lines = text.split('\n');
   const fontSize = 14;
   const lineHeight = 18;
@@ -266,7 +258,6 @@ export class TmateTelegramBot {
 
       const chatId = this.authorizedChat;
       const imgBuf = renderTerminalImage(text);
-      if (!imgBuf) return;
 
       if (this.screenMsgId) {
         // Try to edit existing message
@@ -323,7 +314,6 @@ export class TmateTelegramBot {
       const text = stripAnsi(capturePaneText(this.config.tmuxSession));
       this.lastScreenContent = text;
       const imgBuf = renderTerminalImage(text);
-      if (!imgBuf) return;
       const oldMsgId = this.screenMsgId;
 
       const sent = await this.bot.sendPhoto(chatId, imgBuf, {
