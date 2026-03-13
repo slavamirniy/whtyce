@@ -27,6 +27,7 @@ export interface SavedConfig {
   whisperModel?: string;
   tmuxSession?: string;
   port?: number;
+  secret?: string;
   threadIds?: Record<string, number>;
 }
 

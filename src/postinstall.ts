@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// Postinstall: just check and install deps silently
 import { execSync } from 'child_process';
 
 function which(cmd: string): boolean {
@@ -12,81 +13,35 @@ function which(cmd: string): boolean {
 
 function tryInstall(packages: string[]): boolean {
   const pkg = packages.join(' ');
-  // Try apt (Debian/Ubuntu)
   if (which('apt-get')) {
     try {
-      console.log(`[whtyce] Installing ${pkg} via apt-get...`);
       execSync(`apt-get install -y ${pkg} 2>/dev/null`, { stdio: 'inherit' });
       return true;
     } catch {
-      // Try with sudo
-      try {
-        execSync(`sudo apt-get install -y ${pkg}`, { stdio: 'inherit' });
-        return true;
-      } catch {}
+      try { execSync(`sudo apt-get install -y ${pkg}`, { stdio: 'inherit' }); return true; } catch {}
     }
   }
-  // Try yum (RHEL/CentOS)
   if (which('yum')) {
-    try {
-      console.log(`[whtyce] Installing ${pkg} via yum...`);
-      execSync(`sudo yum install -y ${pkg}`, { stdio: 'inherit' });
-      return true;
-    } catch {}
+    try { execSync(`sudo yum install -y ${pkg}`, { stdio: 'inherit' }); return true; } catch {}
   }
-  // Try apk (Alpine)
   if (which('apk')) {
-    try {
-      console.log(`[whtyce] Installing cmake build-base via apk...`);
-      execSync(`apk add --no-cache cmake build-base`, { stdio: 'inherit' });
-      return true;
-    } catch {}
+    const apkPkg = packages.map(p => p === 'build-essential' ? 'build-base' : p).join(' ');
+    try { execSync(`apk add --no-cache ${apkPkg}`, { stdio: 'inherit' }); return true; } catch {}
   }
-  // Try brew (macOS)
   if (which('brew')) {
-    try {
-      console.log(`[whtyce] Installing cmake via brew...`);
-      execSync(`brew install cmake`, { stdio: 'inherit' });
-      return true;
-    } catch {}
+    try { execSync(`brew install ${pkg}`, { stdio: 'inherit' }); return true; } catch {}
   }
   return false;
 }
 
-// Check cmake
-if (!which('cmake')) {
-  console.log('[whtyce] cmake not found, attempting to install build tools...');
-  if (!tryInstall(['cmake', 'build-essential'])) {
-    console.warn('[whtyce] Could not install cmake automatically.');
-    console.warn('[whtyce] Please install cmake and build tools manually:');
-    console.warn('[whtyce]   Ubuntu/Debian: sudo apt install cmake build-essential');
-    console.warn('[whtyce]   macOS: brew install cmake');
-    console.warn('[whtyce]   Alpine: apk add cmake build-base');
-  }
+const needed: string[] = [];
+if (!which('cmake')) needed.push('cmake');
+if (!which('make') || !which('gcc')) needed.push('build-essential');
+if (!which('tmux')) needed.push('tmux');
+
+if (needed.length > 0) {
+  console.log(`[whtyce] Installing: ${needed.join(', ')}...`);
+  tryInstall(needed);
 }
 
-// Check make/gcc
-if (!which('make') || !which('gcc')) {
-  if (which('apt-get')) {
-    try {
-      execSync('apt-get install -y build-essential 2>/dev/null || sudo apt-get install -y build-essential', { stdio: 'inherit' });
-    } catch {}
-  }
-}
-
-// Check tmux
-if (!which('tmux')) {
-  console.log('[whtyce] tmux not found, attempting to install...');
-  if (!tryInstall(['tmux'])) {
-    console.warn('[whtyce] Could not install tmux automatically.');
-    console.warn('[whtyce] Please install tmux manually.');
-  }
-}
-
-// Check ffmpeg (optional, for voice messages)
-if (!which('ffmpeg')) {
-  console.log('[whtyce] ffmpeg not found, attempting to install (needed for voice messages)...');
-  tryInstall(['ffmpeg']);
-}
-
-console.log('[whtyce] Setup complete.');
+if (!which('ffmpeg')) tryInstall(['ffmpeg']);
