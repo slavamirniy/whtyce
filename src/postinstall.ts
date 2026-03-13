@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// Postinstall: just check and install deps silently
 import { execSync } from 'child_process';
 
 function which(cmd: string): boolean {
@@ -34,14 +33,33 @@ function tryInstall(packages: string[]): boolean {
   return false;
 }
 
-const needed: string[] = [];
-if (!which('cmake')) needed.push('cmake');
-if (!which('make') || !which('gcc')) needed.push('build-essential');
-if (!which('tmux')) needed.push('tmux');
+const deps: [string, string][] = [
+  ['cmake', 'cmake'],
+  ['make', 'build-essential'],
+  ['gcc', 'build-essential'],
+  ['tmux', 'tmux'],
+  ['ffmpeg', 'ffmpeg'],
+];
 
-if (needed.length > 0) {
-  console.log(`[whtyce] Installing: ${needed.join(', ')}...`);
-  tryInstall(needed);
+console.log('[whtyce] Checking system dependencies...');
+const missing: string[] = [];
+for (const [bin, pkg] of deps) {
+  if (which(bin)) {
+    console.log(`  ✓ ${bin}`);
+  } else {
+    console.log(`  ✗ ${bin} — missing`);
+    if (!missing.includes(pkg)) missing.push(pkg);
+  }
 }
 
-if (!which('ffmpeg')) tryInstall(['ffmpeg']);
+if (missing.length === 0) {
+  console.log('[whtyce] All dependencies OK');
+} else {
+  console.log(`\n[whtyce] Installing: ${missing.join(', ')}...`);
+  if (tryInstall(missing)) {
+    console.log('[whtyce] Dependencies installed successfully');
+  } else {
+    console.warn('[whtyce] Could not auto-install. Please install manually:');
+    console.warn(`  sudo apt install ${missing.join(' ')}`);
+  }
+}
