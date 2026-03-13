@@ -7,6 +7,8 @@ import http from 'http';
 import WebSocket from 'ws';
 import path from 'path';
 import crypto from 'crypto';
+import fs from 'fs';
+import os from 'os';
 import { execSync, spawn, ChildProcess } from 'child_process';
 import { TmateTelegramBot } from './telegram';
 
@@ -18,10 +20,46 @@ export interface ServerConfig {
   whisperEnabled: boolean;
   whisperModel: string;
   tmuxSession: string;
+  threadsEnabled: boolean;
+}
+
+export interface SavedConfig {
+  tgBotToken?: string;
+  tgUserId?: number;
+  threadsEnabled?: boolean;
+  whisperEnabled?: boolean;
+  whisperModel?: string;
+  tmuxSession?: string;
+  port?: number;
+  threadIds?: Record<string, number>;
+}
+
+const CONFIG_DIR = path.join(os.homedir(), '.whtyce');
+const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
+
+export function loadSavedConfig(): SavedConfig {
+  try {
+    if (fs.existsSync(CONFIG_FILE)) {
+      return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8'));
+    }
+  } catch {}
+  return {};
+}
+
+export function saveConfig(saved: SavedConfig) {
+  try {
+    if (!fs.existsSync(CONFIG_DIR)) {
+      fs.mkdirSync(CONFIG_DIR, { recursive: true });
+    }
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(saved, null, 2));
+  } catch (err: any) {
+    console.error('[config] Failed to save:', err.message);
+  }
 }
 
 export function startServer(config: ServerConfig) {
-  const { port, secret, tmuxSession } = config;
+  const { port, secret } = config;
+  let tmuxSession = config.tmuxSession;
 
   // --- Whisper ---
   let whisperPipeline: any = null;
@@ -80,7 +118,6 @@ export function startServer(config: ServerConfig) {
       'Enter', 'Tab', 'Escape', 'Up', 'Down', 'Left', 'Right',
       'Home', 'End', 'BSpace', 'DC', 'PageUp', 'PageDown',
     ]);
-    // Allow C-<letter> patterns
     if (allowed.has(key) || /^C-[a-z]$/.test(key)) {
       const child = spawn('tmux', ['send-keys', '-t', tmuxSession, key]);
       child.on('error', () => {});
@@ -171,6 +208,139 @@ export function startServer(config: ServerConfig) {
     res.json({ status: 'ok', whisper: whisperReady });
   });
 
+  // --- Config API ---
+  app.get(`/api/${secret}/config`, (_req, res) => {
+    res.json({
+      tgBotToken: config.tgBotToken || '',
+      tgUserId: config.tgUserId || 0,
+      threadsEnabled: config.threadsEnabled,
+      whisperEnabled: config.whisperEnabled,
+      whisperModel: config.whisperModel,
+      tmuxSession: config.tmuxSession,
+      // Status info
+      whisperReady,
+      whisperLoading,
+      tgActive: tgBot !== null,
+      tgConnected: tgBot?.isConnected() ?? false,
+      tgCode: tgBot?.getAccessCode() ?? null,
+      tgBotUsername: tgBot?.getBotUsername() ?? null,
+    });
+  });
+
+  app.post(`/api/${secret}/config`, (req, res) => {
+    const body = req.body;
+    const saved = loadSavedConfig();
+    let tgRestart = false;
+
+    // Telegram settings
+    if (body.tgBotToken !== undefined) {
+      const newToken = String(body.tgBotToken || '').trim();
+      if (newToken !== config.tgBotToken) {
+        config.tgBotToken = newToken;
+        saved.tgBotToken = newToken;
+        tgRestart = true;
+      }
+    }
+    if (body.tgUserId !== undefined) {
+      const newId = parseInt(body.tgUserId, 10) || 0;
+      if (newId !== config.tgUserId) {
+        config.tgUserId = newId;
+        saved.tgUserId = newId;
+        tgRestart = true;
+      }
+    }
+    if (body.threadsEnabled !== undefined) {
+      const newVal = !!body.threadsEnabled;
+      if (newVal !== config.threadsEnabled) {
+        config.threadsEnabled = newVal;
+        saved.threadsEnabled = newVal;
+        tgRestart = true;
+      }
+    }
+
+    // Whisper settings (saved for next restart)
+    if (body.whisperEnabled !== undefined) {
+      config.whisperEnabled = !!body.whisperEnabled;
+      saved.whisperEnabled = config.whisperEnabled;
+      if (config.whisperEnabled && !whisperReady && !whisperLoading) {
+        loadWhisper();
+      }
+    }
+    if (body.whisperModel !== undefined) {
+      const newModel = String(body.whisperModel).trim();
+      if (newModel && newModel !== config.whisperModel) {
+        config.whisperModel = newModel;
+        saved.whisperModel = newModel;
+        // Model change requires restart to take effect
+      }
+    }
+
+    // Tmux session
+    if (body.tmuxSession !== undefined) {
+      const newSession = String(body.tmuxSession).trim();
+      if (newSession && newSession !== config.tmuxSession) {
+        config.tmuxSession = newSession;
+        saved.tmuxSession = newSession;
+        tmuxSession = newSession;
+        tgRestart = true;
+      }
+    }
+
+    // Save to disk
+    saveConfig(saved);
+
+    // Restart telegram bot if needed
+    if (tgRestart) {
+      if (tgBot) { tgBot.stop(); tgBot = null; }
+      if (config.tgBotToken) {
+        try {
+          tgBot = new TmateTelegramBot({
+            token: config.tgBotToken,
+            tmuxSession: config.tmuxSession,
+            getWhisperPipeline: () => whisperPipeline,
+            isWhisperReady: () => whisperReady,
+            autoAuthUserId: config.tgUserId || undefined,
+            threadsEnabled: config.threadsEnabled,
+            onUserAuthorized: (userId) => {
+              config.tgUserId = userId;
+              const s = loadSavedConfig();
+              s.tgUserId = userId;
+              saveConfig(s);
+              console.log(`[config] Saved authorized user ID: ${userId}`);
+            },
+            onThreadsChanged: (threadIds) => {
+              const s = loadSavedConfig();
+              s.threadIds = threadIds;
+              saveConfig(s);
+            },
+            savedThreadIds: loadSavedConfig().threadIds,
+          });
+          console.log(`[telegram] Bot restarted, code: ${tgBot.getAccessCode()}`);
+        } catch (err: any) {
+          console.error('[telegram] Failed to start bot:', err.message);
+        }
+      }
+    }
+
+    // Return updated state
+    res.json({
+      ok: true,
+      tgBotToken: config.tgBotToken,
+      tgUserId: config.tgUserId,
+      threadsEnabled: config.threadsEnabled,
+      whisperEnabled: config.whisperEnabled,
+      whisperModel: config.whisperModel,
+      tmuxSession: config.tmuxSession,
+      whisperReady,
+      whisperLoading,
+      tgActive: tgBot !== null,
+      tgConnected: tgBot?.isConnected() ?? false,
+      tgCode: tgBot?.getAccessCode() ?? null,
+      tgBotUsername: tgBot?.getBotUsername() ?? null,
+    });
+  });
+
+  // --- Whisper status ---
   app.get(`/api/${secret}/whisper-status`, (_req, res) => {
     res.json({ ready: whisperReady, loading: whisperLoading });
   });
@@ -226,6 +396,20 @@ export function startServer(config: ServerConfig) {
         getWhisperPipeline: () => whisperPipeline,
         isWhisperReady: () => whisperReady,
         autoAuthUserId: config.tgUserId || undefined,
+        threadsEnabled: config.threadsEnabled,
+        onUserAuthorized: (userId) => {
+          config.tgUserId = userId;
+          const s = loadSavedConfig();
+          s.tgUserId = userId;
+          saveConfig(s);
+          console.log(`[config] Saved authorized user ID: ${userId}`);
+        },
+        onThreadsChanged: (threadIds) => {
+          const s = loadSavedConfig();
+          s.threadIds = threadIds;
+          saveConfig(s);
+        },
+        savedThreadIds: loadSavedConfig().threadIds,
       });
       const code = tgBot.getAccessCode();
       console.log(`[telegram] Bot started, code: ${code}`);
@@ -285,7 +469,6 @@ export function startServer(config: ServerConfig) {
 
   // --- Helpers ---
   function getExternalIP(): string {
-    const os = require('os');
     const interfaces = os.networkInterfaces();
     for (const name of Object.keys(interfaces)) {
       for (const iface of interfaces[name] || []) {
@@ -322,6 +505,20 @@ export function startServer(config: ServerConfig) {
       getWhisperPipeline: () => whisperPipeline,
       isWhisperReady: () => whisperReady,
       autoAuthUserId: config.tgUserId || undefined,
+      threadsEnabled: config.threadsEnabled,
+      onUserAuthorized: (userId) => {
+        config.tgUserId = userId;
+        const s = loadSavedConfig();
+        s.tgUserId = userId;
+        saveConfig(s);
+        console.log(`[config] Saved authorized user ID: ${userId}`);
+      },
+      onThreadsChanged: (threadIds) => {
+        const s = loadSavedConfig();
+        s.threadIds = threadIds;
+        saveConfig(s);
+      },
+      savedThreadIds: loadSavedConfig().threadIds,
     });
   }
 
@@ -360,7 +557,6 @@ export function startServer(config: ServerConfig) {
   process.on('SIGINT', () => {
     console.log('\nShutting down...');
     shutdown();
-    // CLI handles printing restart command
     setTimeout(() => process.exit(0), 100);
   });
 

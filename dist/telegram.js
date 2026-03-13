@@ -9,6 +9,10 @@ const canvas_1 = require("canvas");
 const child_process_1 = require("child_process");
 const fs_1 = __importDefault(require("fs"));
 const crypto_1 = __importDefault(require("crypto"));
+// Known bot commands (handled via both /cmd and //cmd)
+const BOT_COMMANDS = new Set([
+    'screen', 'ctrl', 'tab', 'esc', 'new', 'kill', 'sessions',
+]);
 function stripAnsi(str) {
     return str.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/\x1b\][^\x07]*\x07/g, '');
 }
@@ -23,25 +27,30 @@ function capturePaneText(session) {
         return '(tmux session not available)';
     }
 }
+// Image aspect ratio 17:26 (matches 340x520 Telegram preview), rendered at 2x
+const IMG_WIDTH = 680;
+const IMG_HEIGHT = 1040;
+const IMG_FONT_SIZE = 18;
+const IMG_LINE_HEIGHT = 22;
+const IMG_PADDING_X = Math.round(IMG_WIDTH * 0.05); // 5% = 34px
+const IMG_PADDING_Y = Math.round(IMG_HEIGHT * 0.05); // 5% = 52px
+const IMG_CHAR_WIDTH = 10.8;
+// Calculated terminal dimensions that fit the image (respecting padding on ALL sides)
+const TERM_COLS = Math.floor((IMG_WIDTH - IMG_PADDING_X * 2) / IMG_CHAR_WIDTH);
+const TERM_ROWS = Math.floor((IMG_HEIGHT - IMG_PADDING_Y * 2) / IMG_LINE_HEIGHT);
 function renderTerminalImage(text) {
-    const lines = text.split('\n');
-    const fontSize = 14;
-    const lineHeight = 18;
-    const paddingX = 12;
-    const paddingY = 10;
-    const charWidth = 8.4;
-    const maxLineLen = Math.max(...lines.map(l => l.length), 40);
-    const width = Math.ceil(maxLineLen * charWidth + paddingX * 2);
-    const height = Math.max(lines.length * lineHeight + paddingY * 2, 100);
-    const canvas = (0, canvas_1.createCanvas)(width, height);
+    const canvas = (0, canvas_1.createCanvas)(IMG_WIDTH, IMG_HEIGHT);
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = '#1a1a2e';
-    ctx.fillRect(0, 0, width, height);
-    ctx.font = `${fontSize}px "Courier New", "Liberation Mono", monospace`;
+    ctx.fillRect(0, 0, IMG_WIDTH, IMG_HEIGHT);
+    ctx.font = `${IMG_FONT_SIZE}px "Courier New", "Liberation Mono", monospace`;
     ctx.fillStyle = '#e0e0e0';
     ctx.textBaseline = 'top';
-    for (let i = 0; i < lines.length; i++) {
-        ctx.fillText(lines[i], paddingX, paddingY + i * lineHeight);
+    const lines = text.split('\n');
+    for (let i = 0; i < Math.min(lines.length, TERM_ROWS); i++) {
+        // Clip line to TERM_COLS to prevent overflow past right padding
+        const line = lines[i].length > TERM_COLS ? lines[i].slice(0, TERM_COLS) : lines[i];
+        ctx.fillText(line, IMG_PADDING_X, IMG_PADDING_Y + i * IMG_LINE_HEIGHT);
     }
     return canvas.toBuffer('image/png');
 }
@@ -53,60 +62,138 @@ function generateCode() {
     }
     return code;
 }
+function listTmuxSessions() {
+    try {
+        return (0, child_process_1.execSync)("tmux list-sessions -F '#{session_name}'", { encoding: 'utf-8' })
+            .trim().split('\n').filter(Boolean);
+    }
+    catch {
+        return [];
+    }
+}
+function createTmuxSession(name, cwd) {
+    try {
+        (0, child_process_1.execSync)(`tmux new-session -d -s ${JSON.stringify(name)} -x ${TERM_COLS} -y ${TERM_ROWS} -c "${cwd || process.cwd()}"`, {
+            encoding: 'utf-8',
+        });
+        return true;
+    }
+    catch {
+        return false;
+    }
+}
+function killTmuxSession(name) {
+    try {
+        (0, child_process_1.execSync)(`tmux kill-session -t ${JSON.stringify(name)} 2>/dev/null`, { encoding: 'utf-8' });
+        return true;
+    }
+    catch {
+        return false;
+    }
+}
+function generateSessionName() {
+    const existing = listTmuxSessions();
+    let i = 1;
+    while (existing.includes(`s${i}`))
+        i++;
+    return `s${i}`;
+}
 class TmateTelegramBot {
     constructor(config) {
         this.authorizedChat = null;
-        this.screenMsgId = null;
-        this.lastScreenContent = '';
-        this.updateInterval = null;
         this.botUsername = null;
+        // Session management
+        this.sessions = new Map();
+        this.activeSession = null;
+        // Rendering throttle
+        this.lastRenderTime = 0;
+        this.renderScheduled = false;
+        this.pollInterval = null;
         this.updating = false;
         this.config = config;
         this.accessCode = generateCode();
-        this.bot = new node_telegram_bot_api_1.default(config.token, { polling: true });
-        // Fetch bot username
+        this.bot = new node_telegram_bot_api_1.default(config.token, { polling: true, filepath: true });
         this.bot.getMe().then(me => {
             this.botUsername = me.username || null;
             console.log(`[telegram] Bot: @${this.botUsername}`);
         }).catch(() => { });
+        this.registerCommands();
         this.setupHandlers();
-        // Auto-authorize if user ID provided
         if (config.autoAuthUserId) {
             this.authorize(config.autoAuthUserId);
         }
     }
-    getAccessCode() {
-        return this.accessCode;
+    getAccessCode() { return this.accessCode; }
+    getBotUsername() { return this.botUsername; }
+    isConnected() { return this.authorizedChat !== null; }
+    // --- Register bot commands with Telegram ---
+    registerCommands() {
+        const commands = [
+            { command: 'screen', description: 'Take screenshot' },
+            { command: 'ctrl', description: 'Send Ctrl+key (e.g. /ctrl c)' },
+            { command: 'tab', description: 'Send Tab' },
+            { command: 'esc', description: 'Send Escape' },
+        ];
+        if (this.config.threadsEnabled) {
+            commands.push({ command: 'new', description: 'Create tmux session (/new [name])' }, { command: 'kill', description: 'Kill tmux session (/kill <name>)' }, { command: 'sessions', description: 'Refresh session list' });
+        }
+        this.bot.setMyCommands(commands).catch((err) => {
+            console.error('[telegram] Failed to set commands:', err.message);
+        });
     }
-    getBotUsername() {
-        return this.botUsername;
-    }
-    isConnected() {
-        return this.authorizedChat !== null;
+    // --- Clean up old forum topics on startup to avoid duplicates ---
+    async cleanupOldTopics(chatId) {
+        const savedIds = this.config.savedThreadIds;
+        if (!savedIds || Object.keys(savedIds).length === 0) {
+            console.log('[telegram] No saved topics to clean up');
+            return;
+        }
+        console.log(`[telegram] Cleaning up ${Object.keys(savedIds).length} old topic(s)...`);
+        for (const [name, threadId] of Object.entries(savedIds)) {
+            try {
+                await this.callApi('deleteForumTopic', {
+                    chat_id: chatId,
+                    message_thread_id: threadId,
+                });
+                console.log(`[telegram] Deleted old topic: ${name} (${threadId})`);
+            }
+            catch (err) {
+                // Topic may already be gone — that's fine
+                console.log(`[telegram] Could not delete old topic ${name}: ${err.message}`);
+            }
+        }
+        // Clear saved thread IDs
+        if (this.config.onThreadsChanged) {
+            this.config.onThreadsChanged({});
+        }
     }
     setupHandlers() {
-        this.bot.onText(/\/start(.*)/, (msg, match) => {
-            const chatId = msg.chat.id;
-            const code = (match?.[1] || '').trim();
-            if (this.authorizedChat === chatId) {
-                this.bot.sendMessage(chatId, 'Already connected. Send text to type in terminal.');
-                return;
-            }
-            if (this.authorizedChat !== null) {
-                this.bot.sendMessage(chatId, 'Another session is already connected.');
-                return;
-            }
-            if (code === this.accessCode) {
-                this.authorize(chatId);
-            }
-            else {
-                this.bot.sendMessage(chatId, 'Send the 5-letter access code to connect.');
-            }
-        });
+        // Single unified message handler
         this.bot.on('message', async (msg) => {
             const chatId = msg.chat.id;
+            const text = msg.text || '';
+            // --- /start is always a bot command (Telegram system) ---
+            if (text.startsWith('/start')) {
+                this.bot.deleteMessage(chatId, msg.message_id).catch(() => { });
+                const code = text.replace(/^\/start\s*/, '').trim();
+                if (this.authorizedChat === chatId) {
+                    return;
+                }
+                if (this.authorizedChat !== null) {
+                    this.bot.sendMessage(chatId, 'Another session is already connected.');
+                    return;
+                }
+                if (code === this.accessCode) {
+                    this.authorize(chatId);
+                }
+                else {
+                    this.bot.sendMessage(chatId, 'Send the 5-letter access code to connect.');
+                }
+                return;
+            }
+            // --- Not authorized ---
             if (this.authorizedChat !== chatId) {
-                if (msg.text && msg.text.trim().toUpperCase() === this.accessCode) {
+                if (text && text.trim().toUpperCase() === this.accessCode) {
                     if (this.authorizedChat !== null) {
                         this.bot.sendMessage(chatId, 'Another session is already connected.');
                         return;
@@ -114,30 +201,75 @@ class TmateTelegramBot {
                     this.authorize(chatId);
                     return;
                 }
-                if (msg.text && !msg.text.startsWith('/')) {
-                    this.bot.sendMessage(chatId, 'Send the 5-letter access code to connect.');
-                }
                 return;
             }
-            if (msg.text && !msg.text.startsWith('/')) {
-                this.sendToTmux(msg.text);
-                this.sendToTmuxSpecial('Enter');
-                // Delete user message to keep chat clean
+            // --- //something → send /something to terminal (escape for slash commands) ---
+            if (text.startsWith('//')) {
+                const termText = text.slice(1); // strip one /, keep the other
+                const targetSession = this.getSessionForThread(msg.message_thread_id) || this.activeSession;
+                if (this.config.threadsEnabled && msg.message_thread_id) {
+                    const ts = this.getSessionForThread(msg.message_thread_id);
+                    if (ts && this.activeSession !== ts)
+                        this.activateSession(ts);
+                }
+                if (targetSession) {
+                    this.sendToTmux(targetSession, termText);
+                    this.sendToTmuxSpecial(targetSession, 'Enter');
+                }
                 this.bot.deleteMessage(chatId, msg.message_id).catch(() => { });
-                setTimeout(() => this.refreshScreen(), 500);
+                setTimeout(() => this.scheduleRender(), 500);
+                return;
             }
-            if (msg.voice || msg.audio) {
-                // Delete user voice message
+            // --- Known bot command: /screen, /ctrl, etc. ---
+            if (text.startsWith('/')) {
+                const cmdMatch = text.match(/^\/([a-zA-Z]+)(.*)/);
+                if (cmdMatch && BOT_COMMANDS.has(cmdMatch[1].toLowerCase())) {
+                    this.bot.deleteMessage(chatId, msg.message_id).catch(() => { });
+                    this.handleBotCommand(msg, cmdMatch[1] + cmdMatch[2]);
+                    return;
+                }
+                // Unknown /command → falls through to terminal send below
+            }
+            // --- Auto-connect in threads mode ---
+            if (this.config.threadsEnabled && msg.message_thread_id) {
+                const threadSession = this.getSessionForThread(msg.message_thread_id);
+                if (threadSession && this.activeSession !== threadSession) {
+                    this.activateSession(threadSession);
+                }
+            }
+            const targetSession = this.getSessionForThread(msg.message_thread_id) || this.activeSession;
+            // --- Text → send to terminal ---
+            if (text) {
+                if (targetSession) {
+                    this.sendToTmux(targetSession, text);
+                    this.sendToTmuxSpecial(targetSession, 'Enter');
+                }
                 this.bot.deleteMessage(chatId, msg.message_id).catch(() => { });
-                await this.handleVoice(chatId, msg);
+                setTimeout(() => this.scheduleRender(), 500);
+                return;
+            }
+            // --- Voice → transcribe and send ---
+            if (msg.voice || msg.audio) {
+                this.bot.deleteMessage(chatId, msg.message_id).catch(() => { });
+                await this.handleVoice(chatId, msg, targetSession);
             }
         });
+        // --- Callback queries (buttons) ---
         this.bot.on('callback_query', async (query) => {
             const chatId = query.message?.chat.id;
             if (!chatId || this.authorizedChat !== chatId) {
                 this.bot.answerCallbackQuery(query.id, { text: 'Not authorized' });
                 return;
             }
+            const data = query.data || '';
+            // Connect to session
+            if (data.startsWith('connect:')) {
+                const sessionName = data.slice(8);
+                this.activateSession(sessionName);
+                this.bot.answerCallbackQuery(query.id, { text: `Connected to ${sessionName}` });
+                return;
+            }
+            // Regular actions
             const actions = {
                 'refresh': ['', 'Refreshed'],
                 'enter': ['Enter', 'Enter sent'],
@@ -145,117 +277,422 @@ class TmateTelegramBot {
                 'arrowup': ['Up', 'Up sent'],
                 'arrowdown': ['Down', 'Down sent'],
             };
-            const action = actions[query.data || ''];
-            if (action) {
+            const action = actions[data];
+            if (action && this.activeSession) {
                 if (action[0])
-                    this.sendToTmuxSpecial(action[0]);
+                    this.sendToTmuxSpecial(this.activeSession, action[0]);
                 this.bot.answerCallbackQuery(query.id, { text: action[1] });
-                setTimeout(() => this.refreshScreen(), action[0] ? 300 : 0);
+                if (action[0]) {
+                    setTimeout(() => this.scheduleRender(), 300);
+                }
+                else {
+                    this.scheduleRender();
+                }
             }
-        });
-        this.bot.onText(/\/screen/, (msg) => {
-            if (this.authorizedChat === msg.chat.id)
-                this.refreshScreen();
-        });
-        this.bot.onText(/\/ctrl (.+)/, (msg, match) => {
-            if (this.authorizedChat !== msg.chat.id)
-                return;
-            const key = match?.[1]?.trim();
-            if (key) {
-                this.sendToTmuxSpecial(`C-${key}`);
-                setTimeout(() => this.refreshScreen(), 300);
-            }
-        });
-        this.bot.onText(/\/tab/, (msg) => {
-            if (this.authorizedChat !== msg.chat.id)
-                return;
-            this.sendToTmuxSpecial('Tab');
-            setTimeout(() => this.refreshScreen(), 300);
-        });
-        this.bot.onText(/\/esc/, (msg) => {
-            if (this.authorizedChat !== msg.chat.id)
-                return;
-            this.sendToTmuxSpecial('Escape');
-            setTimeout(() => this.refreshScreen(), 300);
         });
     }
-    authorize(chatId) {
+    // --- Parse and execute bot command ---
+    handleBotCommand(msg, cmdText) {
+        const parts = cmdText.trim().split(/\s+/);
+        const cmd = parts[0].toLowerCase();
+        const args = parts.slice(1).join(' ').trim();
+        // Determine target session (from thread or active)
+        const targetSession = this.getSessionForThread(msg.message_thread_id) || this.activeSession;
+        switch (cmd) {
+            case 'screen':
+                if (this.activeSession)
+                    this.forceRender();
+                break;
+            case 'ctrl':
+                if (args && targetSession) {
+                    this.sendToTmuxSpecial(targetSession, `C-${args}`);
+                    setTimeout(() => this.scheduleRender(), 300);
+                }
+                break;
+            case 'tab':
+                if (targetSession) {
+                    this.sendToTmuxSpecial(targetSession, 'Tab');
+                    setTimeout(() => this.scheduleRender(), 300);
+                }
+                break;
+            case 'esc':
+                if (targetSession) {
+                    this.sendToTmuxSpecial(targetSession, 'Escape');
+                    setTimeout(() => this.scheduleRender(), 300);
+                }
+                break;
+            case 'new':
+                if (this.config.threadsEnabled) {
+                    const name = args || generateSessionName();
+                    this.createSession(name);
+                }
+                break;
+            case 'kill':
+                if (this.config.threadsEnabled && args) {
+                    this.deleteSession(args);
+                }
+                break;
+            case 'sessions':
+                if (this.config.threadsEnabled) {
+                    this.syncSessions();
+                }
+                break;
+        }
+    }
+    persistThreadIds() {
+        if (!this.config.onThreadsChanged)
+            return;
+        const ids = {};
+        for (const [name, state] of this.sessions) {
+            if (state.threadId)
+                ids[name] = state.threadId;
+        }
+        this.config.onThreadsChanged(ids);
+    }
+    getSessionForThread(threadId) {
+        if (!threadId || !this.config.threadsEnabled)
+            return null;
+        for (const [name, state] of this.sessions) {
+            if (state.threadId === threadId)
+                return name;
+        }
+        return null;
+    }
+    async authorize(chatId) {
         this.authorizedChat = chatId;
-        this.bot.sendMessage(chatId, [
-            'Connected to tmate-mobile!',
+        // Save user ID to config for auto-auth on restart
+        if (this.config.onUserAuthorized) {
+            this.config.onUserAuthorized(chatId);
+        }
+        const lines = [
+            'Connected to whtyce!',
             '',
-            'Send any text \u2014 it gets typed + Enter.',
-            'Send voice message \u2014 speech-to-text.',
+            'Text \u2192 typed + Enter',
+            'Voice \u2192 speech-to-text',
+            '//cmd \u2192 sends /cmd to terminal',
             '',
+            'Bot commands:',
             '/screen \u2014 screenshot',
             '/ctrl c \u2014 Ctrl+C',
             '/tab \u2014 Tab',
             '/esc \u2014 Escape',
-        ].join('\n'));
-        // Send initial screenshot, then start auto-update
-        setTimeout(async () => {
-            await this.sendNewScreenshot(chatId);
-            this.startAutoUpdate();
-        }, 500);
+        ];
+        if (this.config.threadsEnabled) {
+            lines.push('/new [name] \u2014 create session');
+            lines.push('/kill <name> \u2014 delete session');
+            lines.push('/sessions \u2014 refresh list');
+        }
+        await this.bot.sendMessage(chatId, lines.join('\n'));
+        if (this.config.threadsEnabled) {
+            // Clean up old forum topics before creating new ones
+            await this.cleanupOldTopics(chatId);
+            await this.syncSessions();
+        }
+        else {
+            this.activeSession = this.config.tmuxSession;
+            this.sessions.set(this.activeSession, {
+                threadId: null,
+                screenMsgId: null,
+                lastContent: '',
+            });
+            await this.sendNewScreenshot(this.activeSession);
+            this.startContentPolling();
+        }
     }
-    startAutoUpdate() {
-        if (this.updateInterval)
-            clearInterval(this.updateInterval);
-        this.updateInterval = setInterval(() => {
-            if (this.authorizedChat === null) {
-                if (this.updateInterval)
-                    clearInterval(this.updateInterval);
-                return;
-            }
-            this.refreshScreen();
-        }, 3000);
-    }
-    // Core: refresh screen by editing existing message, or send new if needed
-    async refreshScreen() {
-        if (this.authorizedChat === null || this.updating)
+    async syncSessions() {
+        if (!this.authorizedChat)
             return;
-        this.updating = true;
-        try {
-            const text = stripAnsi(capturePaneText(this.config.tmuxSession));
-            if (text === this.lastScreenContent && this.screenMsgId) {
-                return; // No changes
+        const chatId = this.authorizedChat;
+        const tmuxSessions = listTmuxSessions();
+        if (tmuxSessions.length === 0) {
+            this.bot.sendMessage(chatId, 'No tmux sessions found. Use /new to create one.');
+            return;
+        }
+        for (const name of tmuxSessions) {
+            if (this.sessions.has(name))
+                continue;
+            try {
+                const topic = await this.callApi('createForumTopic', {
+                    chat_id: chatId,
+                    name: `\uD83D\uDDA5 ${name}`,
+                    icon_color: 7322096,
+                });
+                this.sessions.set(name, {
+                    threadId: topic.message_thread_id,
+                    screenMsgId: null,
+                    lastContent: '',
+                });
+                await this.sendSessionPreview(name);
+                this.persistThreadIds();
             }
-            this.lastScreenContent = text;
-            const chatId = this.authorizedChat;
-            const imgBuf = renderTerminalImage(text);
-            if (this.screenMsgId) {
-                // Try to edit existing message
-                try {
-                    await this.bot.editMessageMedia({
-                        type: 'photo',
-                        media: 'attach://screen.png',
-                    }, {
+            catch (err) {
+                console.error(`[telegram] Failed to create topic for ${name}:`, err.message);
+            }
+        }
+        // Remove dead sessions
+        for (const [name, state] of this.sessions) {
+            if (!tmuxSessions.includes(name)) {
+                if (state.threadId) {
+                    this.callApi('deleteForumTopic', {
                         chat_id: chatId,
-                        message_id: this.screenMsgId,
-                    });
-                    // Re-attach keyboard after editMessageMedia
-                    const keyboard = this.getKeyboard();
-                    await this.bot.editMessageReplyMarkup(keyboard, {
-                        chat_id: chatId,
-                        message_id: this.screenMsgId,
+                        message_thread_id: state.threadId,
                     }).catch(() => { });
-                    return;
                 }
-                catch {
-                    // Edit failed, send new
-                    this.screenMsgId = null;
-                }
+                this.sessions.delete(name);
+                if (this.activeSession === name)
+                    this.activeSession = null;
             }
-            await this.sendNewScreenshot(chatId);
+        }
+        this.persistThreadIds();
+        this.startContentPolling();
+    }
+    async createSession(name) {
+        if (!this.authorizedChat)
+            return;
+        const chatId = this.authorizedChat;
+        if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+            this.bot.sendMessage(chatId, `Invalid name: "${name}". Use letters, digits, - or _`);
+            return;
+        }
+        if (this.sessions.has(name)) {
+            this.bot.sendMessage(chatId, `Session "${name}" already exists.`);
+            return;
+        }
+        if (!createTmuxSession(name)) {
+            this.bot.sendMessage(chatId, `Failed to create tmux session "${name}".`);
+            return;
+        }
+        try {
+            const topic = await this.callApi('createForumTopic', {
+                chat_id: chatId,
+                name: `\uD83D\uDDA5 ${name}`,
+                icon_color: 7322096,
+            });
+            this.sessions.set(name, {
+                threadId: topic.message_thread_id,
+                screenMsgId: null,
+                lastContent: '',
+            });
+            await this.sendSessionPreview(name);
+            this.persistThreadIds();
+            console.log(`[telegram] Created session: ${name}`);
         }
         catch (err) {
-            console.error('[telegram] Screen update error:', err.message);
+            console.error(`[telegram] Failed to create topic for ${name}:`, err.message);
+            killTmuxSession(name);
+        }
+    }
+    async deleteSession(name) {
+        if (!this.authorizedChat)
+            return;
+        const chatId = this.authorizedChat;
+        const state = this.sessions.get(name);
+        if (!state) {
+            this.bot.sendMessage(chatId, `Session "${name}" not found.`);
+            return;
+        }
+        if (this.activeSession === name) {
+            this.activeSession = null;
+        }
+        killTmuxSession(name);
+        if (state.threadId) {
+            // Send redirect to main chat before deleting topic
+            const remaining = [...this.sessions.keys()].filter(n => n !== name);
+            const helpLines = [
+                `Session "${name}" deleted.`,
+                '',
+                remaining.length > 0
+                    ? `Active sessions: ${remaining.join(', ')}`
+                    : 'No sessions left. Use /new to create one.',
+                '',
+                'Commands:',
+                '/new [name] \u2014 create session',
+                '/sessions \u2014 refresh list',
+            ];
+            await this.bot.sendMessage(chatId, helpLines.join('\n'));
+            try {
+                await this.callApi('deleteForumTopic', {
+                    chat_id: chatId,
+                    message_thread_id: state.threadId,
+                });
+            }
+            catch (err) {
+                console.error(`[telegram] Failed to delete topic for ${name}:`, err.message);
+            }
+        }
+        this.sessions.delete(name);
+        this.persistThreadIds();
+        console.log(`[telegram] Deleted session: ${name}`);
+    }
+    async sendSessionPreview(sessionName) {
+        const state = this.sessions.get(sessionName);
+        if (!state || !this.authorizedChat)
+            return;
+        // Skip if already has a screenshot
+        if (state.screenMsgId)
+            return;
+        const text = stripAnsi(capturePaneText(sessionName));
+        state.lastContent = text;
+        const imgBuf = renderTerminalImage(text);
+        const sendOpts = {
+            reply_markup: this.getKeyboard(sessionName),
+        };
+        if (state.threadId)
+            sendOpts.message_thread_id = state.threadId;
+        try {
+            const sent = await this.bot.sendPhoto(this.authorizedChat, imgBuf, sendOpts, {
+                filename: 'screen.png',
+                contentType: 'image/png',
+            });
+            state.screenMsgId = sent.message_id;
+            this.lastRenderTime = Date.now(); // prevent immediate re-render
+        }
+        catch (err) {
+            console.error(`[telegram] Failed to send preview for ${sessionName}:`, err.message);
+        }
+    }
+    activateSession(sessionName) {
+        const prevSession = this.activeSession;
+        this.activeSession = sessionName;
+        if (prevSession && prevSession !== sessionName) {
+            this.updateSessionKeyboard(prevSession);
+        }
+        this.updateSessionKeyboard(sessionName);
+        this.forceRender();
+    }
+    async updateSessionKeyboard(sessionName) {
+        const state = this.sessions.get(sessionName);
+        if (!state?.screenMsgId || !this.authorizedChat)
+            return;
+        try {
+            await this.bot.editMessageReplyMarkup(this.getKeyboard(sessionName), {
+                chat_id: this.authorizedChat,
+                message_id: state.screenMsgId,
+            });
+        }
+        catch { }
+    }
+    // --- Content polling with throttle ---
+    startContentPolling() {
+        if (this.pollInterval)
+            clearInterval(this.pollInterval);
+        this.pollInterval = setInterval(() => {
+            if (!this.activeSession || !this.authorizedChat)
+                return;
+            const state = this.sessions.get(this.activeSession);
+            if (!state)
+                return;
+            const text = stripAnsi(capturePaneText(this.activeSession));
+            if (text !== state.lastContent || !state.screenMsgId) {
+                this.scheduleRender();
+            }
+        }, 500);
+    }
+    scheduleRender() {
+        if (this.renderScheduled || this.updating)
+            return;
+        const now = Date.now();
+        const elapsed = now - this.lastRenderTime;
+        const minInterval = 3000;
+        if (elapsed >= minInterval) {
+            this.doRender();
+        }
+        else {
+            this.renderScheduled = true;
+            setTimeout(() => {
+                this.renderScheduled = false;
+                this.doRender();
+            }, minInterval - elapsed);
+        }
+    }
+    forceRender() {
+        this.lastRenderTime = 0;
+        this.renderScheduled = false;
+        this.doRender();
+    }
+    async doRender() {
+        if (!this.activeSession || !this.authorizedChat || this.updating)
+            return;
+        this.updating = true;
+        this.lastRenderTime = Date.now();
+        const sessionName = this.activeSession;
+        const state = this.sessions.get(sessionName);
+        if (!state) {
+            this.updating = false;
+            return;
+        }
+        try {
+            const text = stripAnsi(capturePaneText(sessionName));
+            if (text === state.lastContent && state.screenMsgId) {
+                return;
+            }
+            state.lastContent = text;
+            const chatId = this.authorizedChat;
+            const imgBuf = renderTerminalImage(text);
+            if (state.screenMsgId) {
+                try {
+                    const tmpFile = `/tmp/whtyce_screen_${Date.now()}.png`;
+                    fs_1.default.writeFileSync(tmpFile, imgBuf);
+                    try {
+                        await this.bot.editMessageMedia({
+                            type: 'photo',
+                            media: `attach://${tmpFile}`,
+                        }, {
+                            chat_id: chatId,
+                            message_id: state.screenMsgId,
+                            reply_markup: this.getKeyboard(sessionName),
+                        });
+                        return;
+                    }
+                    finally {
+                        try {
+                            fs_1.default.unlinkSync(tmpFile);
+                        }
+                        catch { }
+                    }
+                }
+                catch {
+                    // Edit failed — send new + delete old
+                }
+            }
+            await this.sendNewScreenshot(sessionName);
+        }
+        catch (err) {
+            console.error('[telegram] Render error:', err.message);
         }
         finally {
             this.updating = false;
         }
     }
-    getKeyboard() {
+    getKeyboard(sessionName) {
+        const isActive = sessionName === this.activeSession;
+        if (this.config.threadsEnabled && sessionName) {
+            if (isActive) {
+                // Active: just action buttons, no Disconnect/Delete
+                return {
+                    inline_keyboard: [
+                        [
+                            { text: 'Refresh', callback_data: 'refresh' },
+                            { text: 'Enter', callback_data: 'enter' },
+                            { text: 'Ctrl+C', callback_data: 'ctrlc' },
+                        ],
+                        [
+                            { text: 'Up', callback_data: 'arrowup' },
+                            { text: 'Down', callback_data: 'arrowdown' },
+                        ],
+                    ],
+                };
+            }
+            else {
+                // Inactive: just Connect
+                return {
+                    inline_keyboard: [
+                        [{ text: '\uD83D\uDD0C Connect', callback_data: `connect:${sessionName}` }],
+                    ],
+                };
+            }
+        }
+        // Non-threads mode (single session)
         return {
             inline_keyboard: [
                 [
@@ -270,29 +707,36 @@ class TmateTelegramBot {
             ],
         };
     }
-    async sendNewScreenshot(chatId) {
+    async sendNewScreenshot(sessionName) {
+        const state = this.sessions.get(sessionName);
+        if (!state || !this.authorizedChat)
+            return;
         try {
-            const text = stripAnsi(capturePaneText(this.config.tmuxSession));
-            this.lastScreenContent = text;
+            const text = stripAnsi(capturePaneText(sessionName));
+            state.lastContent = text;
             const imgBuf = renderTerminalImage(text);
-            const oldMsgId = this.screenMsgId;
-            const sent = await this.bot.sendPhoto(chatId, imgBuf, {
-                reply_markup: this.getKeyboard(),
-            }, {
+            const oldMsgId = state.screenMsgId;
+            // Delete old message first to avoid duplicates
+            if (oldMsgId) {
+                state.screenMsgId = null;
+                await this.bot.deleteMessage(this.authorizedChat, oldMsgId).catch(() => { });
+            }
+            const sendOpts = {
+                reply_markup: this.getKeyboard(sessionName),
+            };
+            if (state.threadId)
+                sendOpts.message_thread_id = state.threadId;
+            const sent = await this.bot.sendPhoto(this.authorizedChat, imgBuf, sendOpts, {
                 filename: 'screen.png',
                 contentType: 'image/png',
             });
-            this.screenMsgId = sent.message_id;
-            // Delete old message AFTER new one is sent
-            if (oldMsgId && oldMsgId !== sent.message_id) {
-                this.bot.deleteMessage(chatId, oldMsgId).catch(() => { });
-            }
+            state.screenMsgId = sent.message_id;
         }
         catch (err) {
             console.error('[telegram] Failed to send screenshot:', err.message);
         }
     }
-    async handleVoice(chatId, msg) {
+    async handleVoice(chatId, msg, targetSession) {
         if (!this.config.isWhisperReady()) {
             this.bot.sendMessage(chatId, 'Whisper is still loading...');
             return;
@@ -300,7 +744,19 @@ class TmateTelegramBot {
         const fileId = msg.voice?.file_id || msg.audio?.file_id;
         if (!fileId)
             return;
-        const statusMsg = await this.bot.sendMessage(chatId, 'Transcribing...');
+        // Auto-connect in threads
+        if (this.config.threadsEnabled && msg.message_thread_id) {
+            const threadSession = this.getSessionForThread(msg.message_thread_id);
+            if (threadSession && this.activeSession !== threadSession) {
+                this.activateSession(threadSession);
+                targetSession = threadSession;
+            }
+        }
+        const threadId = msg.message_thread_id;
+        const statusOpts = {};
+        if (threadId)
+            statusOpts.message_thread_id = threadId;
+        const statusMsg = await this.bot.sendMessage(chatId, 'Transcribing...', statusOpts);
         try {
             const filePath = await this.bot.downloadFile(fileId, '/tmp');
             const wavPath = `/tmp/tg_voice_${Date.now()}.wav`;
@@ -328,19 +784,28 @@ class TmateTelegramBot {
             }
             catch { }
             if (text) {
-                this.sendToTmux(text);
-                this.sendToTmuxSpecial('Enter');
-                await this.bot.editMessageText(`Sent: ${text}`, {
+                const session = targetSession || this.activeSession;
+                if (session) {
+                    this.sendToTmux(session, text);
+                    this.sendToTmuxSpecial(session, 'Enter');
+                }
+                await this.bot.editMessageText(`\u2713 ${text}`, {
                     chat_id: chatId,
                     message_id: statusMsg.message_id,
                 });
-                setTimeout(() => this.refreshScreen(), 500);
+                setTimeout(() => {
+                    this.bot.deleteMessage(chatId, statusMsg.message_id).catch(() => { });
+                }, 3000);
+                setTimeout(() => this.scheduleRender(), 500);
             }
             else {
                 await this.bot.editMessageText('Could not transcribe audio.', {
                     chat_id: chatId,
                     message_id: statusMsg.message_id,
                 });
+                setTimeout(() => {
+                    this.bot.deleteMessage(chatId, statusMsg.message_id).catch(() => { });
+                }, 5000);
             }
         }
         catch (err) {
@@ -351,17 +816,29 @@ class TmateTelegramBot {
             }).catch(() => { });
         }
     }
-    sendToTmux(text) {
-        const child = (0, child_process_1.spawn)('tmux', ['send-keys', '-t', this.config.tmuxSession, '-l', text]);
+    sendToTmux(session, text) {
+        const child = (0, child_process_1.spawn)('tmux', ['send-keys', '-t', session, '-l', text]);
         child.on('error', () => { });
     }
-    sendToTmuxSpecial(key) {
-        const child = (0, child_process_1.spawn)('tmux', ['send-keys', '-t', this.config.tmuxSession, key]);
+    sendToTmuxSpecial(session, key) {
+        const child = (0, child_process_1.spawn)('tmux', ['send-keys', '-t', session, key]);
         child.on('error', () => { });
+    }
+    async callApi(method, params) {
+        const url = `https://api.telegram.org/bot${this.config.token}/${method}`;
+        const resp = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(params),
+        });
+        const data = await resp.json();
+        if (!data.ok)
+            throw new Error(data.description || 'API error');
+        return data.result;
     }
     stop() {
-        if (this.updateInterval)
-            clearInterval(this.updateInterval);
+        if (this.pollInterval)
+            clearInterval(this.pollInterval);
         this.bot.stopPolling();
     }
 }

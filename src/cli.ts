@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { startServer, ServerConfig } from './server';
+import { startServer, ServerConfig, loadSavedConfig } from './server';
 import crypto from 'crypto';
 import net from 'net';
 
@@ -8,12 +8,10 @@ import net from 'net';
 process.on('uncaughtException', (err) => {
   console.error('[crash] Uncaught exception:', err.message);
   console.error(err.stack);
-  // Don't exit — keep running
 });
 
 process.on('unhandledRejection', (reason: any) => {
   console.error('[crash] Unhandled rejection:', reason?.message || reason);
-  // Don't exit — keep running
 });
 
 function findFreePort(startPort: number): Promise<number> {
@@ -42,8 +40,12 @@ function printHelp() {
     -s, --secret <secret>   URL secret (default: random)
     -t, --tg-token <token>  Telegram bot token
     -u, --tg-user <id>      Telegram user ID (auto-authorize)
+    --threads                Enable Telegram threads (forum topics per tmux session)
     --no-whisper             Disable Whisper voice model
     -h, --help               Show this help
+
+  All settings can be configured via the web UI and are saved
+  to ~/.whtyce/config.json. CLI args override saved settings.
   `);
 }
 
@@ -56,6 +58,8 @@ function parseArgs(argv: string[]): Record<string, string | boolean> {
       args.help = true;
     } else if (arg === '--no-whisper') {
       args.noWhisper = true;
+    } else if (arg === '--threads') {
+      args.threads = true;
     } else if ((arg === '-p' || arg === '--port') && argv[i + 1]) {
       args.port = argv[++i];
     } else if ((arg === '-s' || arg === '--secret') && argv[i + 1]) {
@@ -78,40 +82,26 @@ async function main() {
     process.exit(0);
   }
 
-  const requestedPort = args.port ? parseInt(args.port as string, 10) : 0;
+  // Load saved config from ~/.whtyce/config.json
+  const saved = loadSavedConfig();
+
+  const requestedPort = args.port ? parseInt(args.port as string, 10) : (saved.port || 0);
   const port = requestedPort || await findFreePort(8075);
   const secret = (args.secret as string) || crypto.randomBytes(8).toString('hex');
 
+  // CLI args override saved config
   const config: ServerConfig = {
     port,
     secret,
-    tgBotToken: (args.tgToken as string) || process.env.TG_BOT_TOKEN || '',
-    tgUserId: args.tgUser ? parseInt(args.tgUser as string, 10) : (process.env.TG_USER_ID ? parseInt(process.env.TG_USER_ID, 10) : 0),
-    whisperEnabled: !args.noWhisper,
-    whisperModel: process.env.WHISPER_MODEL || 'Xenova/whisper-base',
-    tmuxSession: process.env.TMUX_SESSION || 'whtyce',
+    tgBotToken: (args.tgToken as string) || saved.tgBotToken || process.env.TG_BOT_TOKEN || '',
+    tgUserId: args.tgUser
+      ? parseInt(args.tgUser as string, 10)
+      : (saved.tgUserId || (process.env.TG_USER_ID ? parseInt(process.env.TG_USER_ID, 10) : 0)),
+    whisperEnabled: args.noWhisper ? false : (saved.whisperEnabled !== undefined ? saved.whisperEnabled : true),
+    whisperModel: saved.whisperModel || process.env.WHISPER_MODEL || 'Xenova/whisper-small',
+    tmuxSession: saved.tmuxSession || process.env.TMUX_SESSION || 'whtyce',
+    threadsEnabled: args.threads ? true : (saved.threadsEnabled || false),
   };
-
-  // Build restart command on exit
-  const buildRestartCmd = () => {
-    const parts = ['whtyce'];
-    parts.push('-p', String(config.port));
-    parts.push('-s', config.secret);
-    if (config.tgBotToken) parts.push('-t', config.tgBotToken);
-    if (config.tgUserId) parts.push('-u', String(config.tgUserId));
-    if (!config.whisperEnabled) parts.push('--no-whisper');
-    return parts.join(' ');
-  };
-
-  const cleanup = () => {
-    console.log('\n');
-    console.log('  To restart with same settings:');
-    console.log(`  $ ${buildRestartCmd()}`);
-    console.log('');
-  };
-
-  process.on('SIGINT', () => { cleanup(); });
-  process.on('SIGTERM', () => { cleanup(); });
 
   startServer(config);
 }

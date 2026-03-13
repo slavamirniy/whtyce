@@ -6,7 +6,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#0f0f1a">
-  <title>tmate mobile</title>
+  <title>whtyce</title>
 
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
   <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
@@ -39,76 +39,360 @@
       height: 100dvh;
     }
 
-    /* --- Status Bar --- */
-    #status-bar {
+    /* --- Tab Bar --- */
+    .tab-bar {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      padding: 6px 12px;
       background: #161625;
       border-bottom: 1px solid #2a2a40;
-      min-height: 36px;
       flex-shrink: 0;
+      padding: 0 8px;
+      gap: 0;
     }
 
-    .status-left {
-      display: flex;
-      align-items: center;
-      gap: 8px;
+    .tab-bar-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #666;
+      padding: 10px 12px 10px 8px;
+      letter-spacing: 0.03em;
     }
 
-    .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: #ef4444;
-      flex-shrink: 0;
-      transition: background 0.3s;
-    }
-
-    .status-dot.connected { background: #22c55e; }
-
-    .status-text {
-      font-size: 12px;
-      color: #888;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .status-right {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-
-    .icon-btn {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 32px;
-      height: 28px;
-      border-radius: 6px;
-      border: 1px solid #2a2a40;
-      background: transparent;
-      color: #888;
+    .tab-btn {
+      padding: 10px 18px;
       font-size: 14px;
+      font-weight: 600;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: #666;
       cursor: pointer;
       transition: all 0.15s;
     }
 
-    .icon-btn:hover, .icon-btn:active {
-      background: #2a2a40;
+    .tab-btn:hover { color: #aaa; }
+
+    .tab-btn.active {
+      color: #3b82f6;
+      border-bottom-color: #3b82f6;
+    }
+
+    .tab-spacer { flex: 1; }
+
+    .tab-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding-right: 8px;
+      font-size: 12px;
+      color: #666;
+    }
+
+    .tab-status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #ef4444;
+      transition: background 0.3s;
+    }
+
+    .tab-status-dot.ok { background: #22c55e; }
+
+    /* --- Views --- */
+    .view {
+      display: none;
+      flex: 1;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .view.active {
+      display: flex;
+    }
+
+    /* --- Settings View --- */
+    .settings-scroll {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 16px;
+    }
+
+    .settings-inner {
+      max-width: 520px;
+      margin: 0 auto;
+    }
+
+    .card {
+      background: #161625;
+      border: 1px solid #2a2a40;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .card.primary {
+      border-color: #2a3a65;
+      background: #141428;
+    }
+
+    .card-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #888;
+      margin-bottom: 14px;
+    }
+
+    .card-title .badge {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .badge.on { background: #1a3525; color: #22c55e; }
+    .badge.off { background: #351a1a; color: #ef4444; }
+    .badge.loading { background: #352a1a; color: #f59e0b; }
+
+    .card p {
+      font-size: 13px;
+      color: #777;
+      line-height: 1.5;
+      margin-bottom: 12px;
+    }
+
+    /* --- Form elements --- */
+    .field {
+      margin-bottom: 14px;
+    }
+
+    .field:last-child { margin-bottom: 0; }
+
+    .field label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: #888;
+      margin-bottom: 5px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .field-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .input {
+      width: 100%;
+      padding: 9px 12px;
+      background: #0a0a15;
       color: #e0e0e0;
+      border: 1px solid #2a2a45;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      outline: none;
+      transition: border-color 0.15s;
     }
 
-    .icon-btn.active {
-      background: #3b82f6;
-      border-color: #3b82f6;
+    .input:focus { border-color: #3b82f6; }
+    .input::placeholder { color: #444; }
+    .input:disabled { opacity: 0.5; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 9px 18px;
+      border-radius: 8px;
+      border: none;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-primary { background: #3b82f6; color: white; }
+    .btn-primary:active { background: #2563eb; }
+
+    .btn-danger { background: #451a1a; color: #ef4444; border: 1px solid #6b2a2a; }
+    .btn-danger:active { background: #6b2a2a; }
+
+    .btn-outline { background: transparent; color: #888; border: 1px solid #2a2a45; }
+    .btn-outline:active { background: #2a2a45; }
+
+    /* --- Toggle --- */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 0;
+    }
+
+    .toggle-label {
+      font-size: 14px;
+      color: #ccc;
+    }
+
+    .toggle-hint {
+      font-size: 11px;
+      color: #666;
+      margin-top: 2px;
+    }
+
+    .toggle {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+
+    .toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: #2a2a45;
+      border-radius: 24px;
+      transition: 0.2s;
+    }
+
+    .toggle-slider::before {
+      content: '';
+      position: absolute;
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background: #888;
+      border-radius: 50%;
+      transition: 0.2s;
+    }
+
+    .toggle input:checked + .toggle-slider {
+      background: #2563eb;
+    }
+
+    .toggle input:checked + .toggle-slider::before {
+      transform: translateX(20px);
+      background: white;
+    }
+
+    /* --- Select --- */
+    .select {
+      padding: 9px 12px;
+      background: #0a0a15;
+      color: #e0e0e0;
+      border: 1px solid #2a2a45;
+      border-radius: 8px;
+      font-size: 14px;
+      outline: none;
+      cursor: pointer;
+      width: 100%;
+    }
+
+    .select:focus { border-color: #3b82f6; }
+
+    /* --- Status indicator --- */
+    .status-line {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-top: 10px;
+    }
+
+    .status-line.ok { background: #1a3525; color: #22c55e; border: 1px solid #2a5535; }
+    .status-line.warn { background: #352a1a; color: #f59e0b; border: 1px solid #554a2a; }
+    .status-line.info { background: #1a1a35; color: #3b82f6; border: 1px solid #2a2a55; }
+    .status-line.off { background: #1a1a22; color: #666; border: 1px solid #2a2a35; }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      background: currentColor;
+    }
+
+    .status-line.info .status-dot {
+      animation: pulse-dot 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    /* --- Telegram code --- */
+    .tg-code-block {
+      display: none;
+      text-align: center;
+      margin-top: 12px;
+      padding: 16px;
+      background: #0a0a15;
+      border-radius: 10px;
+      border: 1px solid #2a2a45;
+    }
+
+    .tg-code-block.visible { display: block; }
+
+    .tg-code-label {
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 6px;
+    }
+
+    .tg-code-value {
+      font-size: 32px;
+      font-weight: 700;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      letter-spacing: 0.15em;
+      color: #3b82f6;
+      user-select: all;
+    }
+
+    .tg-deeplink {
+      display: none;
+      margin-top: 10px;
+      padding: 10px 16px;
+      background: #0088cc;
       color: white;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      text-decoration: none;
+      text-align: center;
     }
 
-    /* --- Terminal --- */
+    .tg-deeplink.visible { display: inline-block; }
+
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    /* --- Terminal View --- */
     #terminal-container {
       flex: 1;
       overflow: hidden;
@@ -120,7 +404,6 @@
       padding: 2px;
     }
 
-    /* --- Quick Keys --- */
     #quick-keys {
       display: flex;
       flex-wrap: nowrap;
@@ -170,7 +453,6 @@
     .qkey.modifier:active { background: #3a2a65; }
     .qkey.modifier.active { background: #5a3a95; border-color: #7a5ab5; }
 
-    /* --- Toolbar --- */
     #toolbar {
       display: flex;
       align-items: center;
@@ -234,229 +516,11 @@
       color: white;
     }
 
-    /* --- Settings Panel --- */
-    #settings-panel {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: #0f0f1a;
-      z-index: 500;
-      overflow-y: auto;
-      -webkit-overflow-scrolling: touch;
-    }
-
-    #settings-panel.visible { display: block; }
-
-    .settings-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 12px 16px;
-      border-bottom: 1px solid #2a2a40;
-      position: sticky;
-      top: 0;
-      background: #0f0f1a;
-      z-index: 1;
-    }
-
-    .settings-header h2 {
-      font-size: 18px;
-      font-weight: 600;
-      color: #e0e0e0;
-    }
-
-    .settings-close {
-      width: 36px;
-      height: 36px;
-      border-radius: 8px;
-      border: 1px solid #2a2a40;
-      background: transparent;
-      color: #888;
-      font-size: 20px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .settings-close:active { background: #2a2a40; }
-
-    .settings-body {
-      padding: 16px;
-      max-width: 500px;
-      margin: 0 auto;
-    }
-
-    .settings-section {
-      margin-bottom: 28px;
-    }
-
-    .settings-section h3 {
-      font-size: 13px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: #666;
-      margin-bottom: 12px;
-    }
-
-    .settings-card {
-      background: #161625;
-      border: 1px solid #2a2a40;
-      border-radius: 12px;
-      padding: 16px;
-    }
-
-    .settings-card p {
-      font-size: 14px;
-      color: #999;
-      line-height: 1.5;
-      margin-bottom: 12px;
-    }
-
-    .settings-card label {
-      display: block;
-      font-size: 13px;
-      color: #888;
-      margin-bottom: 6px;
-    }
-
-    .settings-input {
-      width: 100%;
-      padding: 10px 12px;
-      background: #0a0a15;
-      color: #e0e0e0;
-      border: 1px solid #2a2a45;
-      border-radius: 8px;
-      font-size: 14px;
-      font-family: 'SF Mono', 'Fira Code', monospace;
-      outline: none;
-    }
-
-    .settings-input:focus { border-color: #3b82f6; }
-
-    .settings-input::placeholder { color: #444; }
-
-    .settings-btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 10px 20px;
-      border-radius: 8px;
-      border: none;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.15s;
-      margin-top: 12px;
-    }
-
-    .settings-btn.primary {
-      background: #3b82f6;
-      color: white;
-    }
-
-    .settings-btn.primary:active { background: #2563eb; }
-
-    .settings-btn.danger {
-      background: #451a1a;
-      color: #ef4444;
-      border: 1px solid #6b2a2a;
-    }
-
-    .settings-btn.danger:active { background: #6b2a2a; }
-
-    .settings-btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    /* --- Telegram code display --- */
-    .tg-code-display {
-      display: none;
-      margin-top: 16px;
-      text-align: center;
-    }
-
-    .tg-code-display.visible { display: block; }
-
-    .tg-code-label {
-      font-size: 13px;
-      color: #888;
-      margin-bottom: 8px;
-    }
-
-    .tg-code {
-      font-size: 36px;
-      font-weight: 700;
-      font-family: 'SF Mono', 'Fira Code', monospace;
-      letter-spacing: 0.15em;
-      color: #3b82f6;
-      background: #1a1a35;
-      border: 2px dashed #3b82f6;
-      border-radius: 12px;
-      padding: 16px 24px;
-      user-select: all;
-      margin-bottom: 8px;
-    }
-
-    .tg-code-hint {
-      font-size: 12px;
-      color: #666;
-      line-height: 1.5;
-    }
-
-    .tg-status {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-top: 12px;
-      padding: 10px 12px;
-      border-radius: 8px;
-      font-size: 13px;
-    }
-
-    .tg-status.waiting {
-      background: #1a1a35;
-      color: #3b82f6;
-      border: 1px solid #2a2a55;
-    }
-
-    .tg-status.connected {
-      background: #1a3525;
-      color: #22c55e;
-      border: 1px solid #2a5535;
-    }
-
-    .tg-status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      flex-shrink: 0;
-    }
-
-    .tg-status.waiting .tg-status-dot {
-      background: #3b82f6;
-      animation: pulse-dot 1.5s ease-in-out infinite;
-    }
-
-    .tg-status.connected .tg-status-dot { background: #22c55e; }
-
-    @keyframes pulse-dot {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.3; }
-    }
-
-    /* --- Voice/Recording overlays (same as before) --- */
+    /* --- Overlays --- */
     #voice-preview {
       display: none;
       position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
+      bottom: 0; left: 0; right: 0;
       background: #161625;
       border-top: 2px solid #3b82f6;
       padding: 12px;
@@ -570,7 +634,6 @@
       color: #e0e0e0;
     }
 
-    /* --- Disconnect banner --- */
     #disconnect-banner {
       display: none;
       position: fixed;
@@ -588,176 +651,172 @@
     }
 
     #disconnect-banner.visible { display: block; }
-
-    /* --- Steps visual --- */
-    .steps-list {
-      list-style: none;
-      padding: 0;
-      margin: 12px 0 0 0;
-    }
-
-    .steps-list li {
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
-      padding: 8px 0;
-      font-size: 14px;
-      color: #ccc;
-      line-height: 1.5;
-    }
-
-    .step-num {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 24px;
-      height: 24px;
-      border-radius: 50%;
-      background: #2a2a45;
-      color: #888;
-      font-size: 12px;
-      font-weight: 700;
-      flex-shrink: 0;
-      margin-top: 1px;
-    }
-
-    .step-num.done {
-      background: #22c55e;
-      color: white;
-    }
   </style>
 </head>
 <body>
   <div id="app">
-    <div id="status-bar">
-      <div class="status-left">
-        <div class="status-dot" id="status-dot"></div>
-        <span class="status-text" id="status-text">Connecting...</span>
+    <!-- Tab Bar -->
+    <div class="tab-bar">
+      <span class="tab-bar-title">whtyce</span>
+      <button class="tab-btn active" data-tab="settings">Settings</button>
+      <button class="tab-btn" data-tab="terminal">Terminal</button>
+      <div class="tab-spacer"></div>
+      <div class="tab-status">
+        <div class="tab-status-dot" id="ws-dot"></div>
+        <span id="ws-status-text">...</span>
       </div>
-      <div class="status-right">
-        <button class="icon-btn" id="toggle-keys" title="Quick keys">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="6" y1="8" x2="6" y2="8"/><line x1="10" y1="8" x2="10" y2="8"/><line x1="14" y1="8" x2="14" y2="8"/><line x1="18" y1="8" x2="18" y2="8"/><line x1="8" y1="12" x2="8" y2="12"/><line x1="12" y1="12" x2="12" y2="12"/><line x1="16" y1="12" x2="16" y2="12"/><line x1="7" y1="16" x2="17" y2="16"/></svg>
+    </div>
+
+    <!-- Settings View -->
+    <div class="view active" id="view-settings">
+      <div class="settings-scroll">
+        <div class="settings-inner">
+
+          <!-- Telegram Card -->
+          <div class="card primary">
+            <div class="card-title">
+              Telegram
+              <span class="badge off" id="tg-badge">off</span>
+            </div>
+            <p>Control terminal from Telegram: send commands, voice messages, get screenshots.</p>
+
+            <div class="field">
+              <label>Bot Token</label>
+              <input type="text" class="input" id="cfg-tg-token" placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz">
+            </div>
+
+            <div class="field">
+              <label>User ID (auto-authorize)</label>
+              <input type="number" class="input" id="cfg-tg-user" placeholder="Optional: your Telegram user ID">
+            </div>
+
+            <div class="field">
+              <div class="toggle-row">
+                <div>
+                  <div class="toggle-label">Forum Threads</div>
+                  <div class="toggle-hint">Each tmux session gets its own topic</div>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="cfg-threads">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="btn-row">
+              <button class="btn btn-primary" id="tg-save-btn">Save & Connect</button>
+              <button class="btn btn-danger" id="tg-stop-btn" style="display:none">Disconnect</button>
+            </div>
+
+            <!-- Code display -->
+            <div class="tg-code-block" id="tg-code-block">
+              <div class="tg-code-label">Send this code to your bot:</div>
+              <div class="tg-code-value" id="tg-code-value">-----</div>
+              <a class="tg-deeplink" id="tg-deeplink" href="#" target="_blank">Open Bot in Telegram</a>
+            </div>
+
+            <div class="status-line off" id="tg-status" style="display:none">
+              <span class="status-dot"></span>
+              <span id="tg-status-text">Not connected</span>
+            </div>
+          </div>
+
+          <!-- Whisper Card -->
+          <div class="card">
+            <div class="card-title">
+              Voice Input
+              <span class="badge off" id="whisper-badge">off</span>
+            </div>
+            <p>Voice-to-text powered by Whisper. Tap the mic in terminal to record.</p>
+
+            <div class="field">
+              <div class="toggle-row">
+                <div>
+                  <div class="toggle-label">Enable Whisper</div>
+                  <div class="toggle-hint">Loads on startup (takes effect on restart)</div>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="cfg-whisper-enabled" checked>
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="field">
+              <label>Model</label>
+              <select class="select" id="cfg-whisper-model">
+                <option value="Xenova/whisper-tiny">tiny (~150MB, fastest)</option>
+                <option value="Xenova/whisper-base">base (~290MB)</option>
+                <option value="Xenova/whisper-small" selected>small (~460MB, recommended)</option>
+                <option value="Xenova/whisper-medium">medium (~1.5GB, best quality)</option>
+              </select>
+            </div>
+
+            <button class="btn btn-outline" id="whisper-save-btn">Save</button>
+
+            <div class="status-line off" id="whisper-status">
+              <span class="status-dot"></span>
+              <span id="whisper-status-text">Checking...</span>
+            </div>
+          </div>
+
+          <!-- General Card -->
+          <div class="card">
+            <div class="card-title">General</div>
+
+            <div class="field">
+              <label>Tmux Session Name</label>
+              <div class="field-row">
+                <input type="text" class="input" id="cfg-tmux-session" placeholder="whtyce">
+                <button class="btn btn-outline" id="general-save-btn">Save</button>
+              </div>
+            </div>
+
+            <p style="margin-top:14px;margin-bottom:0;font-size:12px;color:#555">
+              Settings saved to <code style="color:#777">~/.whtyce/config.json</code>
+            </p>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- Terminal View -->
+    <div class="view" id="view-terminal">
+      <div id="terminal-container"></div>
+
+      <div id="quick-keys">
+        <button class="qkey enter" data-key="Enter">Enter</button>
+        <button class="qkey" data-key="ArrowUp">&uarr;</button>
+        <button class="qkey" data-key="ArrowDown">&darr;</button>
+        <button class="qkey danger" data-special="C-c">Ctrl+C</button>
+        <button class="qkey" data-key="Backspace">&#9003;</button>
+        <button class="qkey" data-key="Escape">Esc</button>
+        <button class="qkey" data-key="Tab">Tab</button>
+        <button class="qkey modifier" data-mod="ctrl" id="ctrl-key">Ctrl</button>
+        <button class="qkey" data-key="/">/</button>
+        <button class="qkey" data-key="-">-</button>
+        <button class="qkey" data-key="_">_</button>
+        <button class="qkey" data-key="|">|</button>
+        <button class="qkey" data-key="~">~</button>
+        <button class="qkey" data-key="`">`</button>
+        <button class="qkey" data-key="ArrowLeft">&larr;</button>
+        <button class="qkey" data-key="ArrowRight">&rarr;</button>
+        <button class="qkey" data-key="Home">Home</button>
+        <button class="qkey" data-key="End">End</button>
+      </div>
+
+      <div id="toolbar">
+        <button class="tool-btn" id="mic-btn" title="Voice input">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
         </button>
-        <button class="icon-btn" id="settings-btn" title="Settings">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+        <button class="tool-btn" id="paste-btn" title="Paste">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
         </button>
-      </div>
-    </div>
-
-    <div id="terminal-container"></div>
-
-    <div id="quick-keys">
-      <button class="qkey enter" data-key="Enter">Enter</button>
-      <button class="qkey" data-key="ArrowUp">&uarr;</button>
-      <button class="qkey" data-key="ArrowDown">&darr;</button>
-      <button class="qkey danger" data-special="C-c">Ctrl+C</button>
-      <button class="qkey" data-key="Backspace">&#9003;</button>
-      <button class="qkey" data-key="Escape">Esc</button>
-      <button class="qkey" data-key="Tab">Tab</button>
-      <button class="qkey modifier" data-mod="ctrl" id="ctrl-key">Ctrl</button>
-      <button class="qkey" data-key="/">/</button>
-      <button class="qkey" data-key="-">-</button>
-      <button class="qkey" data-key="_">_</button>
-      <button class="qkey" data-key="|">|</button>
-      <button class="qkey" data-key="~">~</button>
-      <button class="qkey" data-key="`">`</button>
-      <button class="qkey" data-key="ArrowLeft">&larr;</button>
-      <button class="qkey" data-key="ArrowRight">&rarr;</button>
-      <button class="qkey" data-key="Home">Home</button>
-      <button class="qkey" data-key="End">End</button>
-    </div>
-
-    <div id="toolbar">
-      <button class="tool-btn" id="mic-btn" title="Voice input">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-      </button>
-      <button class="tool-btn" id="paste-btn" title="Paste">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
-      </button>
-      <input type="text" id="text-input" placeholder="Type command..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="text" data-gramm="false">
-      <button class="tool-btn" id="send-btn" title="Send">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-      </button>
-    </div>
-  </div>
-
-  <!-- Settings Panel -->
-  <div id="settings-panel">
-    <div class="settings-header">
-      <h2>Settings</h2>
-      <button class="settings-close" id="settings-close">&times;</button>
-    </div>
-    <div class="settings-body">
-
-      <!-- Telegram Section -->
-      <div class="settings-section">
-        <h3>Telegram</h3>
-        <div class="settings-card" id="tg-card">
-          <p>Control this terminal from Telegram. Send commands, voice messages, get screenshots.</p>
-
-          <div id="tg-setup-form">
-            <ol class="steps-list" id="tg-steps">
-              <li>
-                <span class="step-num" id="step1-num">1</span>
-                <span>Open <strong>@BotFather</strong> in Telegram, send <code>/newbot</code>, and copy the token</span>
-              </li>
-              <li>
-                <span class="step-num" id="step2-num">2</span>
-                <span>Paste the token below and click Connect</span>
-              </li>
-              <li>
-                <span class="step-num" id="step3-num">3</span>
-                <span>Send the code to your bot in Telegram</span>
-              </li>
-            </ol>
-
-            <label for="tg-token-input" style="margin-top:16px">Bot Token</label>
-            <input type="text" class="settings-input" id="tg-token-input" placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz">
-            <button class="settings-btn primary" id="tg-connect-btn">Connect Bot</button>
-          </div>
-
-          <div class="tg-code-display" id="tg-code-display">
-            <div class="tg-code-label">Send this code to your bot:</div>
-            <div class="tg-code" id="tg-code-value">-----</div>
-            <a id="tg-deeplink" href="#" target="_blank" style="display:none;text-decoration:none;margin-top:12px;padding:12px 20px;background:#0088cc;color:white;border-radius:10px;font-size:15px;font-weight:600;text-align:center;width:100%;">Open Bot in Telegram</a>
-            <div class="tg-code-hint" id="tg-code-hint">Open your bot in Telegram and send this code as a message</div>
-          </div>
-
-          <div class="tg-status waiting" id="tg-status-waiting" style="display:none">
-            <span class="tg-status-dot"></span>
-            <span>Waiting for Telegram connection...</span>
-          </div>
-
-          <div class="tg-status connected" id="tg-status-connected" style="display:none">
-            <span class="tg-status-dot"></span>
-            <span>Telegram connected!</span>
-          </div>
-
-          <button class="settings-btn danger" id="tg-disconnect-btn" style="display:none">Disconnect Bot</button>
-        </div>
-      </div>
-
-      <!-- Whisper Section -->
-      <div class="settings-section">
-        <h3>Voice Input</h3>
-        <div class="settings-card">
-          <p>Voice-to-text powered by Whisper. Tap the mic button to record.</p>
-          <div class="tg-status" id="whisper-status" style="background:#1a1a35;color:#888;border:1px solid #2a2a45">
-            <span class="tg-status-dot" id="whisper-dot" style="background:#888"></span>
-            <span id="whisper-status-text">Checking...</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- About -->
-      <div class="settings-section">
-        <h3>About</h3>
-        <div class="settings-card">
-          <p style="margin-bottom:0">
-            <strong>tmate mobile</strong> — mobile terminal access with voice input.
-            Run a command, get a link, control your server from your phone.
-          </p>
-        </div>
+        <input type="text" id="text-input" placeholder="Type command..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="text" data-gramm="false">
+        <button class="tool-btn" id="send-btn" title="Send">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
       </div>
     </div>
   </div>
@@ -794,15 +853,20 @@
     (function() {
       'use strict';
 
-      // --- DOM refs ---
+      // --- Path / API ---
+      const currentPath = window.location.pathname;
+      const pathMatch = currentPath.match(/\/s\/([^/]+)/);
+      const secret = pathMatch ? pathMatch[1] : '';
+      const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${wsProto}//${window.location.host}/ws/${secret}`;
+      const apiBase = `${window.location.protocol}//${window.location.host}/api/${secret}`;
+
+      // --- DOM ---
       const terminalContainer = document.getElementById('terminal-container');
-      const statusDot = document.getElementById('status-dot');
-      const statusText = document.getElementById('status-text');
       const textInput = document.getElementById('text-input');
       const sendBtn = document.getElementById('send-btn');
       const pasteBtn = document.getElementById('paste-btn');
       const micBtn = document.getElementById('mic-btn');
-      const toggleKeysBtn = document.getElementById('toggle-keys');
       const quickKeys = document.getElementById('quick-keys');
       const recordingOverlay = document.getElementById('recording-overlay');
       const stopRecordBtn = document.getElementById('stop-record-btn');
@@ -814,29 +878,32 @@
       const voiceSend = document.getElementById('voice-send');
       const voiceSendEnter = document.getElementById('voice-send-enter');
       const disconnectBanner = document.getElementById('disconnect-banner');
-      const settingsBtn = document.getElementById('settings-btn');
-      const settingsPanel = document.getElementById('settings-panel');
-      const settingsClose = document.getElementById('settings-close');
+      const wsDot = document.getElementById('ws-dot');
+      const wsStatusText = document.getElementById('ws-status-text');
 
-      // Telegram refs
-      const tgTokenInput = document.getElementById('tg-token-input');
-      const tgConnectBtn = document.getElementById('tg-connect-btn');
-      const tgCodeDisplay = document.getElementById('tg-code-display');
+      // Settings DOM
+      const cfgTgToken = document.getElementById('cfg-tg-token');
+      const cfgTgUser = document.getElementById('cfg-tg-user');
+      const cfgThreads = document.getElementById('cfg-threads');
+      const cfgWhisperEnabled = document.getElementById('cfg-whisper-enabled');
+      const cfgWhisperModel = document.getElementById('cfg-whisper-model');
+      const cfgTmuxSession = document.getElementById('cfg-tmux-session');
+
+      const tgSaveBtn = document.getElementById('tg-save-btn');
+      const tgStopBtn = document.getElementById('tg-stop-btn');
+      const tgCodeBlock = document.getElementById('tg-code-block');
       const tgCodeValue = document.getElementById('tg-code-value');
-      const tgStatusWaiting = document.getElementById('tg-status-waiting');
-      const tgStatusConnected = document.getElementById('tg-status-connected');
-      const tgDisconnectBtn = document.getElementById('tg-disconnect-btn');
-      const tgSetupForm = document.getElementById('tg-setup-form');
       const tgDeeplink = document.getElementById('tg-deeplink');
-      const tgCodeHint = document.getElementById('tg-code-hint');
+      const tgBadge = document.getElementById('tg-badge');
+      const tgStatus = document.getElementById('tg-status');
+      const tgStatusText = document.getElementById('tg-status-text');
 
-      // --- Derive paths ---
-      const currentPath = window.location.pathname;
-      const pathMatch = currentPath.match(/\/s\/([^/]+)/);
-      const secret = pathMatch ? pathMatch[1] : '';
-      const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${wsProto}//${window.location.host}/ws/${secret}`;
-      const apiBase = `${window.location.protocol}//${window.location.host}/api/${secret}`;
+      const whisperSaveBtn = document.getElementById('whisper-save-btn');
+      const whisperBadge = document.getElementById('whisper-badge');
+      const whisperStatus = document.getElementById('whisper-status');
+      const whisperStatusText = document.getElementById('whisper-status-text');
+
+      const generalSaveBtn = document.getElementById('general-save-btn');
 
       // --- State ---
       let ws = null;
@@ -848,186 +915,229 @@
       let recordingStartTime = null;
       let recordTimerInterval = null;
       let reconnectTimeout = null;
-
-      // --- Settings ---
-      settingsBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        settingsPanel.classList.add('visible');
-        checkTelegramStatus();
-        checkWhisperStatus();
-      });
-
-      settingsClose.addEventListener('click', (e) => {
-        e.preventDefault();
-        settingsPanel.classList.remove('visible');
-        setTimeout(handleResize, 100);
-      });
-
-      // --- Telegram setup ---
+      let whisperReady = false;
+      let termInitialized = false;
       let tgPollInterval = null;
 
-      tgConnectBtn.addEventListener('click', async (e) => {
-        e.preventDefault();
-        const token = tgTokenInput.value.trim();
-        if (!token) return;
+      // ============================================================
+      //  TABS
+      // ============================================================
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const target = btn.dataset.tab;
+          document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+          document.getElementById('view-' + target).classList.add('active');
 
-        tgConnectBtn.disabled = true;
-        tgConnectBtn.textContent = 'Connecting...';
+          if (target === 'terminal') {
+            if (!termInitialized) {
+              initTerminal();
+              termInitialized = true;
+            }
+            setTimeout(handleResize, 50);
+            if (term) term.focus();
+          }
+          if (target === 'settings') {
+            loadConfig();
+          }
+        });
+      });
 
+      // ============================================================
+      //  CONFIG API
+      // ============================================================
+      async function loadConfig() {
         try {
-          const resp = await fetch(`${apiBase}/telegram/setup`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token }),
-          });
-
+          const resp = await fetch(`${apiBase}/config`);
           const data = await resp.json();
 
-          if (data.error) {
-            alert('Error: ' + data.error);
-            tgConnectBtn.disabled = false;
-            tgConnectBtn.textContent = 'Connect Bot';
-            return;
-          }
+          cfgTgToken.value = data.tgBotToken || '';
+          cfgTgUser.value = data.tgUserId || '';
+          cfgThreads.checked = !!data.threadsEnabled;
+          cfgWhisperEnabled.checked = data.whisperEnabled !== false;
+          cfgWhisperModel.value = data.whisperModel || 'Xenova/whisper-small';
+          cfgTmuxSession.value = data.tmuxSession || 'whtyce';
 
-          // Show code
-          tgCodeValue.textContent = data.code;
-          tgCodeDisplay.classList.add('visible');
-          tgStatusWaiting.style.display = 'flex';
-          tgDisconnectBtn.style.display = 'inline-flex';
-          tgTokenInput.style.display = 'none';
-          tgConnectBtn.style.display = 'none';
-
-          // Mark steps
-          document.getElementById('step1-num').classList.add('done');
-          document.getElementById('step1-num').textContent = '\u2713';
-          document.getElementById('step2-num').classList.add('done');
-          document.getElementById('step2-num').textContent = '\u2713';
-
-          // Poll for connection
-          startTgPoll();
-        } catch (err) {
-          alert('Failed to connect: ' + err.message);
-          tgConnectBtn.disabled = false;
-          tgConnectBtn.textContent = 'Connect Bot';
-        }
-      });
-
-      tgDisconnectBtn.addEventListener('click', async (e) => {
-        e.preventDefault();
-        try {
-          await fetch(`${apiBase}/telegram/disconnect`, { method: 'POST' });
+          updateTgUI(data);
+          updateWhisperUI(data);
         } catch {}
-        resetTgUI();
-      });
+      }
 
-      function updateDeeplink(botUsername, code) {
-        if (botUsername && code) {
-          tgDeeplink.href = `https://t.me/${botUsername}?start=${code}`;
-          tgDeeplink.style.display = 'block';
-          tgCodeHint.style.display = 'none';
+      async function saveConfigFields(fields) {
+        try {
+          const resp = await fetch(`${apiBase}/config`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(fields),
+          });
+          const data = await resp.json();
+          if (data.ok) {
+            updateTgUI(data);
+            updateWhisperUI(data);
+          }
+          return data;
+        } catch (err) {
+          alert('Failed to save: ' + err.message);
+          return null;
         }
       }
 
+      // --- Telegram UI updates ---
+      function updateTgUI(data) {
+        const active = data.tgActive;
+        const connected = data.tgConnected;
+
+        if (active && connected) {
+          tgBadge.className = 'badge on';
+          tgBadge.textContent = 'connected';
+          tgStatus.style.display = 'flex';
+          tgStatus.className = 'status-line ok';
+          tgStatusText.textContent = 'Telegram connected';
+          tgStopBtn.style.display = '';
+          tgSaveBtn.textContent = 'Save & Reconnect';
+          stopTgPoll();
+        } else if (active) {
+          tgBadge.className = 'badge loading';
+          tgBadge.textContent = 'waiting';
+          tgStatus.style.display = 'flex';
+          tgStatus.className = 'status-line info';
+          tgStatusText.textContent = 'Waiting for Telegram connection...';
+          tgStopBtn.style.display = '';
+          tgSaveBtn.textContent = 'Save & Reconnect';
+          startTgPoll();
+        } else {
+          tgBadge.className = 'badge off';
+          tgBadge.textContent = 'off';
+          tgStatus.style.display = 'none';
+          tgStopBtn.style.display = 'none';
+          tgCodeBlock.classList.remove('visible');
+          tgSaveBtn.textContent = 'Save & Connect';
+          stopTgPoll();
+        }
+
+        if (data.tgCode && active) {
+          tgCodeValue.textContent = data.tgCode;
+          tgCodeBlock.classList.add('visible');
+        } else {
+          tgCodeBlock.classList.remove('visible');
+        }
+
+        if (data.tgBotUsername && data.tgCode) {
+          tgDeeplink.href = `https://t.me/${data.tgBotUsername}?start=${data.tgCode}`;
+          tgDeeplink.textContent = `Open @${data.tgBotUsername}`;
+          tgDeeplink.classList.add('visible');
+        } else {
+          tgDeeplink.classList.remove('visible');
+        }
+
+        // Disable token input when active
+        cfgTgToken.disabled = false;
+      }
+
       function startTgPoll() {
-        if (tgPollInterval) clearInterval(tgPollInterval);
+        stopTgPoll();
         tgPollInterval = setInterval(async () => {
           try {
-            const resp = await fetch(`${apiBase}/telegram/status`);
+            const resp = await fetch(`${apiBase}/config`);
             const data = await resp.json();
-            if (data.botUsername) updateDeeplink(data.botUsername, data.code);
-            if (data.connected) {
-              tgStatusWaiting.style.display = 'none';
-              tgStatusConnected.style.display = 'flex';
-              document.getElementById('step3-num').classList.add('done');
-              document.getElementById('step3-num').textContent = '\u2713';
-              clearInterval(tgPollInterval);
-              tgPollInterval = null;
-            }
+            updateTgUI(data);
           } catch {}
         }, 2000);
       }
 
-      async function checkTelegramStatus() {
-        try {
-          const resp = await fetch(`${apiBase}/telegram/status`);
-          const data = await resp.json();
-          if (data.active) {
-            tgCodeValue.textContent = data.code || '-----';
-            tgCodeDisplay.classList.add('visible');
-            tgTokenInput.style.display = 'none';
-            tgConnectBtn.style.display = 'none';
-            tgDisconnectBtn.style.display = 'inline-flex';
-            if (data.botUsername) updateDeeplink(data.botUsername, data.code);
-
-            document.getElementById('step1-num').classList.add('done');
-            document.getElementById('step1-num').textContent = '\u2713';
-            document.getElementById('step2-num').classList.add('done');
-            document.getElementById('step2-num').textContent = '\u2713';
-
-            if (data.connected) {
-              tgStatusWaiting.style.display = 'none';
-              tgStatusConnected.style.display = 'flex';
-              document.getElementById('step3-num').classList.add('done');
-              document.getElementById('step3-num').textContent = '\u2713';
-            } else {
-              tgStatusWaiting.style.display = 'flex';
-              tgStatusConnected.style.display = 'none';
-              startTgPoll();
-            }
-          }
-        } catch {}
-      }
-
-      function resetTgUI() {
+      function stopTgPoll() {
         if (tgPollInterval) { clearInterval(tgPollInterval); tgPollInterval = null; }
-        tgCodeDisplay.classList.remove('visible');
-        tgStatusWaiting.style.display = 'none';
-        tgStatusConnected.style.display = 'none';
-        tgDisconnectBtn.style.display = 'none';
-        tgDeeplink.style.display = 'none';
-        tgCodeHint.style.display = '';
-        tgTokenInput.style.display = '';
-        tgTokenInput.value = '';
-        tgConnectBtn.style.display = '';
-        tgConnectBtn.disabled = false;
-        tgConnectBtn.textContent = 'Connect Bot';
-        ['step1-num','step2-num','step3-num'].forEach((id, i) => {
-          const el = document.getElementById(id);
-          el.classList.remove('done');
-          el.textContent = String(i + 1);
-        });
       }
 
-      // --- Whisper status ---
-      let whisperReady = false;
+      // --- Whisper UI updates ---
+      function updateWhisperUI(data) {
+        whisperReady = data.whisperReady;
+        micBtn.style.opacity = whisperReady ? '1' : '0.5';
 
-      async function checkWhisperStatus() {
+        if (data.whisperReady) {
+          whisperBadge.className = 'badge on';
+          whisperBadge.textContent = 'ready';
+          whisperStatus.className = 'status-line ok';
+          whisperStatusText.textContent = 'Whisper ready';
+        } else if (data.whisperLoading) {
+          whisperBadge.className = 'badge loading';
+          whisperBadge.textContent = 'loading';
+          whisperStatus.className = 'status-line warn';
+          whisperStatusText.textContent = 'Loading model...';
+        } else if (data.whisperEnabled === false) {
+          whisperBadge.className = 'badge off';
+          whisperBadge.textContent = 'disabled';
+          whisperStatus.className = 'status-line off';
+          whisperStatusText.textContent = 'Whisper disabled';
+        } else {
+          whisperBadge.className = 'badge off';
+          whisperBadge.textContent = 'off';
+          whisperStatus.className = 'status-line off';
+          whisperStatusText.textContent = 'Not loaded';
+        }
+      }
+
+      // --- Save handlers ---
+      tgSaveBtn.addEventListener('click', async () => {
+        tgSaveBtn.disabled = true;
+        tgSaveBtn.textContent = 'Saving...';
+        await saveConfigFields({
+          tgBotToken: cfgTgToken.value.trim(),
+          tgUserId: cfgTgUser.value ? parseInt(cfgTgUser.value, 10) : 0,
+          threadsEnabled: cfgThreads.checked,
+        });
+        tgSaveBtn.disabled = false;
+      });
+
+      tgStopBtn.addEventListener('click', async () => {
+        try {
+          await fetch(`${apiBase}/telegram/disconnect`, { method: 'POST' });
+          await loadConfig();
+        } catch {}
+      });
+
+      whisperSaveBtn.addEventListener('click', async () => {
+        whisperSaveBtn.disabled = true;
+        whisperSaveBtn.textContent = 'Saving...';
+        await saveConfigFields({
+          whisperEnabled: cfgWhisperEnabled.checked,
+          whisperModel: cfgWhisperModel.value,
+        });
+        whisperSaveBtn.disabled = false;
+        whisperSaveBtn.textContent = 'Save';
+      });
+
+      generalSaveBtn.addEventListener('click', async () => {
+        generalSaveBtn.disabled = true;
+        generalSaveBtn.textContent = 'Saving...';
+        await saveConfigFields({
+          tmuxSession: cfgTmuxSession.value.trim(),
+        });
+        generalSaveBtn.disabled = false;
+        generalSaveBtn.textContent = 'Save';
+      });
+
+      // --- Whisper status polling ---
+      setInterval(async () => {
         try {
           const resp = await fetch(`${apiBase}/whisper-status`);
           const data = await resp.json();
           whisperReady = data.ready;
-          const dot = document.getElementById('whisper-dot');
-          const txt = document.getElementById('whisper-status-text');
+          micBtn.style.opacity = whisperReady ? '1' : '0.5';
+          // Also update badge if on settings tab
           if (data.ready) {
-            dot.style.background = '#22c55e';
-            txt.textContent = 'Whisper ready';
-            micBtn.style.opacity = '1';
-          } else if (data.loading) {
-            dot.style.background = '#f59e0b';
-            txt.textContent = 'Loading model...';
-            micBtn.style.opacity = '0.5';
-          } else {
-            dot.style.background = '#888';
-            txt.textContent = 'Not loaded';
-            micBtn.style.opacity = '0.5';
+            whisperBadge.className = 'badge on';
+            whisperBadge.textContent = 'ready';
+            whisperStatus.className = 'status-line ok';
+            whisperStatusText.textContent = 'Whisper ready';
           }
         } catch {}
-      }
-      checkWhisperStatus();
-      setInterval(checkWhisperStatus, 10000);
+      }, 10000);
 
-      // --- Terminal setup ---
+      // ============================================================
+      //  TERMINAL
+      // ============================================================
       function initTerminal() {
         if (term) term.dispose();
 
@@ -1092,20 +1202,22 @@
         });
       }
 
-      // --- WebSocket ---
+      // ============================================================
+      //  WEBSOCKET
+      // ============================================================
       function connect() {
         if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) return;
 
-        statusDot.className = 'status-dot';
-        statusText.textContent = 'Connecting...';
+        wsDot.className = 'tab-status-dot';
+        wsStatusText.textContent = 'Connecting...';
         disconnectBanner.classList.remove('visible');
 
         ws = new WebSocket(wsUrl);
 
         ws.onopen = () => {
-          statusDot.className = 'status-dot connected';
-          statusText.textContent = 'Connected';
-          if (fitAddon) {
+          wsDot.className = 'tab-status-dot ok';
+          wsStatusText.textContent = 'Connected';
+          if (fitAddon && termInitialized) {
             fitAddon.fit();
             const dims = fitAddon.proposeDimensions();
             if (dims) wsSend({ type: 'resize', cols: dims.cols, rows: dims.rows });
@@ -1123,18 +1235,18 @@
                 }
                 break;
               case 'exit':
-                statusText.textContent = 'Session ended';
+                wsStatusText.textContent = 'Session ended';
                 break;
               case 'ready':
-                statusText.textContent = 'Connected';
+                wsStatusText.textContent = 'Connected';
                 break;
             }
           } catch {}
         };
 
         ws.onclose = () => {
-          statusDot.className = 'status-dot';
-          statusText.textContent = 'Disconnected';
+          wsDot.className = 'tab-status-dot';
+          wsStatusText.textContent = 'Disconnected';
           disconnectBanner.classList.add('visible');
           if (reconnectTimeout) clearTimeout(reconnectTimeout);
           reconnectTimeout = setTimeout(connect, 3000);
@@ -1149,9 +1261,11 @@
         }
       }
 
-      // --- Resize ---
+      // ============================================================
+      //  RESIZE
+      // ============================================================
       function handleResize() {
-        if (fitAddon) fitAddon.fit();
+        if (fitAddon && termInitialized) fitAddon.fit();
       }
 
       window.addEventListener('resize', handleResize);
@@ -1160,7 +1274,9 @@
         window.visualViewport.addEventListener('resize', () => setTimeout(handleResize, 100));
       }
 
-      // --- Quick Keys ---
+      // ============================================================
+      //  QUICK KEYS
+      // ============================================================
       const specialKeyMap = {
         'Enter': 'Enter', 'Tab': 'Tab', 'Escape': 'Escape',
         'ArrowUp': 'Up', 'ArrowDown': 'Down', 'ArrowRight': 'Right', 'ArrowLeft': 'Left',
@@ -1205,13 +1321,9 @@
         }
       });
 
-      toggleKeysBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        quickKeys.classList.toggle('hidden');
-        setTimeout(handleResize, 250);
-      });
-
-      // --- Text Input ---
+      // ============================================================
+      //  TEXT INPUT
+      // ============================================================
       textInput.setAttribute('autocapitalize', 'off');
 
       textInput.addEventListener('input', () => {
@@ -1257,7 +1369,9 @@
         }
       });
 
-      // --- Voice Recording ---
+      // ============================================================
+      //  VOICE RECORDING
+      // ============================================================
       let isRecording = false;
 
       micBtn.addEventListener('click', async (e) => {
@@ -1419,13 +1533,11 @@
 
       setInterval(() => { wsSend({ type: 'ping' }); }, 30000);
 
-      // --- Init ---
-      initTerminal();
+      // ============================================================
+      //  INIT
+      // ============================================================
+      loadConfig();
       connect();
-
-      terminalContainer.addEventListener('click', () => {
-        if (term) term.focus();
-      });
     })();
   </script>
 </body>
