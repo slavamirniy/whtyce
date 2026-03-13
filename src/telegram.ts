@@ -115,6 +115,12 @@ function createTmuxSession(name: string, cwd?: string): boolean {
   }
 }
 
+function resizeTmuxSession(name: string) {
+  try {
+    execSync(`tmux resize-window -t ${JSON.stringify(name)} -x ${TERM_COLS} -y ${TERM_ROWS} 2>/dev/null`, { encoding: 'utf-8' });
+  } catch {}
+}
+
 function killTmuxSession(name: string): boolean {
   try {
     execSync(`tmux kill-session -t ${JSON.stringify(name)} 2>/dev/null`, { encoding: 'utf-8' });
@@ -459,6 +465,7 @@ export class TmateTelegramBot {
       await this.syncSessions();
     } else {
       this.activeSession = this.config.tmuxSession;
+      resizeTmuxSession(this.activeSession);
       this.sessions.set(this.activeSession, {
         threadId: null,
         screenMsgId: null,
@@ -615,6 +622,7 @@ export class TmateTelegramBot {
     // Skip if already has a screenshot
     if (state.screenMsgId) return;
 
+    resizeTmuxSession(sessionName);
     const text = stripAnsi(capturePaneText(sessionName));
     state.lastContent = text;
     const imgBuf = renderTerminalImage(text);
@@ -639,6 +647,9 @@ export class TmateTelegramBot {
   private activateSession(sessionName: string) {
     const prevSession = this.activeSession;
     this.activeSession = sessionName;
+
+    // Resize tmux to fit the screenshot image
+    resizeTmuxSession(sessionName);
 
     if (prevSession && prevSession !== sessionName) {
       this.updateSessionKeyboard(prevSession);
