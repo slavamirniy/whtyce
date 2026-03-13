@@ -343,8 +343,11 @@ class TmateTelegramBot {
                 }
                 break;
             case 'kill':
-                if (this.config.threadsEnabled && args) {
-                    this.deleteSession(args);
+                if (this.config.threadsEnabled) {
+                    const killTarget = args || targetSession;
+                    if (killTarget) {
+                        this.deleteSession(killTarget);
+                    }
                 }
                 break;
             case 'sessions':
