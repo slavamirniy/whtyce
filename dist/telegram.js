@@ -788,15 +788,7 @@ class TmateTelegramBot {
             catch {
                 fs_1.default.copyFileSync(filePath, wavPath);
             }
-            const wavBuffer = fs_1.default.readFileSync(wavPath);
-            const floatArray = wavBufferToFloat32(wavBuffer);
-            const whisper = this.config.getWhisperPipeline();
-            const result = await whisper(floatArray, {
-                chunk_length_s: 30,
-                stride_length_s: 5,
-                return_timestamps: false,
-            });
-            const text = result.text?.trim() || '';
+            const text = (await this.config.transcribeAudio(wavPath)).trim();
             try {
                 fs_1.default.unlinkSync(filePath);
             }
@@ -865,21 +857,3 @@ class TmateTelegramBot {
     }
 }
 exports.TmateTelegramBot = TmateTelegramBot;
-function wavBufferToFloat32(buffer) {
-    let dataOffset = 44;
-    for (let i = 0; i < buffer.length - 4; i++) {
-        if (buffer[i] === 0x64 && buffer[i + 1] === 0x61 && buffer[i + 2] === 0x74 && buffer[i + 3] === 0x61) {
-            dataOffset = i + 8;
-            break;
-        }
-    }
-    const samples = (buffer.length - dataOffset) / 2;
-    const float32 = new Float32Array(samples);
-    for (let i = 0; i < samples; i++) {
-        const offset = dataOffset + i * 2;
-        if (offset + 1 < buffer.length) {
-            float32[i] = buffer.readInt16LE(offset) / 32768.0;
-        }
-    }
-    return float32;
-}

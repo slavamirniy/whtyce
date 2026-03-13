@@ -745,10 +745,11 @@
             <div class="field">
               <label>Model</label>
               <select class="select" id="cfg-whisper-model">
-                <option value="Xenova/whisper-tiny">tiny (~150MB, fastest)</option>
-                <option value="Xenova/whisper-base">base (~290MB)</option>
-                <option value="Xenova/whisper-small" selected>small (~460MB, recommended)</option>
-                <option value="Xenova/whisper-medium">medium (~1.5GB, best quality)</option>
+                <option value="tiny">tiny (~75MB, fastest)</option>
+                <option value="base" selected>base (~140MB, recommended)</option>
+                <option value="small">small (~460MB)</option>
+                <option value="medium">medium (~1.5GB, best quality)</option>
+                <option value="large-v3-turbo">large-v3-turbo (~3GB, highest quality)</option>
               </select>
             </div>
 
@@ -956,7 +957,7 @@
           cfgTgUser.value = data.tgUserId || '';
           cfgThreads.checked = !!data.threadsEnabled;
           cfgWhisperEnabled.checked = data.whisperEnabled !== false;
-          cfgWhisperModel.value = data.whisperModel || 'Xenova/whisper-small';
+          cfgWhisperModel.value = data.whisperModel || 'base';
           cfgTmuxSession.value = data.tmuxSession || 'whtyce';
 
           updateTgUI(data);

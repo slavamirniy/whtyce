@@ -39,9 +39,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.loadSavedConfig = loadSavedConfig;
 exports.saveConfig = saveConfig;
 exports.startServer = startServer;
-// Suppress onnxruntime warnings
-process.env.ORT_LOG_LEVEL = '3';
-process.env.ORT_LOGGING_LEVEL = '3';
 const express_1 = __importDefault(require("express"));
 const http_1 = __importDefault(require("http"));
 const ws_1 = __importDefault(require("ws"));
@@ -75,8 +72,7 @@ function saveConfig(saved) {
 function startServer(config) {
     const { port, secret } = config;
     let tmuxSession = config.tmuxSession;
-    // --- Whisper ---
-    let whisperPipeline = null;
+    // --- Whisper (nodejs-whisper / whisper.cpp) ---
     let whisperLoading = false;
     let whisperReady = false;
     async function loadWhisper() {
@@ -85,17 +81,37 @@ function startServer(config) {
         if (whisperLoading || whisperReady)
             return;
         whisperLoading = true;
-        console.log('[whisper] Loading model...');
-        const origStderrWrite = process.stderr.write.bind(process.stderr);
-        process.stderr.write = ((chunk, ...args) => {
-            const str = typeof chunk === 'string' ? chunk : chunk.toString();
-            if (str.includes('onnxruntime') || str.includes('Removing initializer'))
-                return true;
-            return origStderrWrite(chunk, ...args);
-        });
+        console.log(`[whisper] Downloading model "${config.whisperModel}" and building whisper.cpp...`);
         try {
-            const { pipeline } = await Promise.resolve().then(() => __importStar(require('@xenova/transformers')));
-            whisperPipeline = await pipeline('automatic-speech-recognition', config.whisperModel, { quantized: true });
+            const { nodewhisper } = await Promise.resolve().then(() => __importStar(require('nodejs-whisper')));
+            // Trigger auto-download + compile by transcribing a silent wav
+            const silentWav = path_1.default.join(os_1.default.tmpdir(), 'whtyce_silence.wav');
+            if (!fs_1.default.existsSync(silentWav)) {
+                // Create minimal 0.1s silent 16kHz mono WAV
+                const sampleRate = 16000;
+                const samples = sampleRate / 10;
+                const buf = Buffer.alloc(44 + samples * 2);
+                buf.write('RIFF', 0);
+                buf.writeUInt32LE(36 + samples * 2, 4);
+                buf.write('WAVE', 8);
+                buf.write('fmt ', 12);
+                buf.writeUInt32LE(16, 16);
+                buf.writeUInt16LE(1, 20);
+                buf.writeUInt16LE(1, 22);
+                buf.writeUInt32LE(sampleRate, 24);
+                buf.writeUInt32LE(sampleRate * 2, 28);
+                buf.writeUInt16LE(2, 32);
+                buf.writeUInt16LE(16, 34);
+                buf.write('data', 36);
+                buf.writeUInt32LE(samples * 2, 40);
+                fs_1.default.writeFileSync(silentWav, buf);
+            }
+            await nodewhisper(silentWav, {
+                modelName: config.whisperModel,
+                autoDownloadModelName: config.whisperModel,
+                whisperOptions: { outputInText: true },
+                logger: { debug: () => { }, error: console.error, log: console.log },
+            });
             whisperReady = true;
             console.log('[whisper] Ready');
         }
@@ -103,11 +119,17 @@ function startServer(config) {
             console.error('[whisper] Failed to load:', err.message);
             whisperLoading = false;
         }
-        finally {
-            process.stderr.write = origStderrWrite;
-        }
     }
     loadWhisper();
+    async function transcribeAudio(wavPath) {
+        const { nodewhisper } = await Promise.resolve().then(() => __importStar(require('nodejs-whisper')));
+        const result = await nodewhisper(wavPath, {
+            modelName: config.whisperModel,
+            whisperOptions: { outputInText: true },
+            logger: { debug: () => { }, error: console.error, log: () => { } },
+        });
+        return result?.trim() || '';
+    }
     // --- Tmux ---
     function ensureTmuxSession() {
         try {
@@ -304,7 +326,7 @@ function startServer(config) {
                     tgBot = new telegram_1.TmateTelegramBot({
                         token: config.tgBotToken,
                         tmuxSession: config.tmuxSession,
-                        getWhisperPipeline: () => whisperPipeline,
+                        transcribeAudio: transcribeAudio,
                         isWhisperReady: () => whisperReady,
                         autoAuthUserId: config.tgUserId || undefined,
                         threadsEnabled: config.threadsEnabled,
@@ -362,11 +384,19 @@ function startServer(config) {
         }
         try {
             const buffer = Buffer.from(audioData, 'base64');
-            const floatArray = wavBufferToFloat32(buffer);
-            const result = await whisperPipeline(floatArray, {
-                chunk_length_s: 30, stride_length_s: 5, return_timestamps: false,
+            const wavPath = path_1.default.join(os_1.default.tmpdir(), `whtyce_web_${Date.now()}.wav`);
+            fs_1.default.writeFileSync(wavPath, buffer);
+            const { nodewhisper } = await Promise.resolve().then(() => __importStar(require('nodejs-whisper')));
+            const result = await nodewhisper(wavPath, {
+                modelName: config.whisperModel,
+                whisperOptions: { outputInText: true },
+                logger: { debug: () => { }, error: console.error, log: () => { } },
             });
-            const text = result.text?.trim() || '';
+            const text = result?.trim() || '';
+            try {
+                fs_1.default.unlinkSync(wavPath);
+            }
+            catch { }
             console.log(`[whisper] "${text.substring(0, 80)}${text.length > 80 ? '...' : ''}"`);
             res.json({ text });
         }
@@ -399,7 +429,7 @@ function startServer(config) {
             tgBot = new telegram_1.TmateTelegramBot({
                 token: token.trim(),
                 tmuxSession,
-                getWhisperPipeline: () => whisperPipeline,
+                transcribeAudio: transcribeAudio,
                 isWhisperReady: () => whisperReady,
                 autoAuthUserId: config.tgUserId || undefined,
                 threadsEnabled: config.threadsEnabled,
@@ -486,30 +516,12 @@ function startServer(config) {
         }
         return 'localhost';
     }
-    function wavBufferToFloat32(buffer) {
-        let dataOffset = 44;
-        for (let i = 0; i < buffer.length - 4; i++) {
-            if (buffer[i] === 0x64 && buffer[i + 1] === 0x61 && buffer[i + 2] === 0x74 && buffer[i + 3] === 0x61) {
-                dataOffset = i + 8;
-                break;
-            }
-        }
-        const samples = (buffer.length - dataOffset) / 2;
-        const float32 = new Float32Array(samples);
-        for (let i = 0; i < samples; i++) {
-            const offset = dataOffset + i * 2;
-            if (offset + 1 < buffer.length) {
-                float32[i] = buffer.readInt16LE(offset) / 32768.0;
-            }
-        }
-        return float32;
-    }
     // --- Start Telegram if token provided ---
     if (config.tgBotToken) {
         tgBot = new telegram_1.TmateTelegramBot({
             token: config.tgBotToken,
             tmuxSession,
-            getWhisperPipeline: () => whisperPipeline,
+            transcribeAudio: transcribeAudio,
             isWhisperReady: () => whisperReady,
             autoAuthUserId: config.tgUserId || undefined,
             threadsEnabled: config.threadsEnabled,

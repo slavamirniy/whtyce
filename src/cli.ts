@@ -98,7 +98,7 @@ async function main() {
       ? parseInt(args.tgUser as string, 10)
       : (saved.tgUserId || (process.env.TG_USER_ID ? parseInt(process.env.TG_USER_ID, 10) : 0)),
     whisperEnabled: args.noWhisper ? false : (saved.whisperEnabled !== undefined ? saved.whisperEnabled : false),
-    whisperModel: saved.whisperModel || process.env.WHISPER_MODEL || 'Xenova/whisper-small',
+    whisperModel: saved.whisperModel || process.env.WHISPER_MODEL || 'base',
     tmuxSession: saved.tmuxSession || process.env.TMUX_SESSION || 'whtyce',
     threadsEnabled: args.threads ? true : (saved.threadsEnabled || false),
   };

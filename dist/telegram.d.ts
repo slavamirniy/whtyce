@@ -1,7 +1,7 @@
 interface TelegramBotConfig {
     token: string;
     tmuxSession: string;
-    getWhisperPipeline: () => any;
+    transcribeAudio: (wavPath: string) => Promise<string>;
     isWhisperReady: () => boolean;
     autoAuthUserId?: number;
     threadsEnabled?: boolean;
