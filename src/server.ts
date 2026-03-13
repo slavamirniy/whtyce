@@ -169,6 +169,10 @@ export function startServer(config: ServerConfig) {
 
   loadWhisper();
 
+  function stripTimestamps(text: string): string {
+    return text.replace(/\[\d{2}:\d{2}:\d{2}\.\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}\.\d{3}\]\s*/g, '').trim();
+  }
+
   async function transcribeAudio(wavPath: string): Promise<string> {
     const { nodewhisper } = await import('nodejs-whisper');
     const result = await nodewhisper(wavPath, {
@@ -176,7 +180,7 @@ export function startServer(config: ServerConfig) {
       whisperOptions: { outputInText: true },
       logger: { debug: () => {}, error: console.error, log: () => {} },
     });
-    return result?.trim() || '';
+    return stripTimestamps(result || '');
   }
 
   // --- Tmux ---
@@ -451,7 +455,7 @@ export function startServer(config: ServerConfig) {
         whisperOptions: { outputInText: true },
         logger: { debug: () => {}, error: console.error, log: () => {} },
       });
-      const text = result?.trim() || '';
+      const text = stripTimestamps(result || '');
       try { fs.unlinkSync(wavPath); } catch {}
       console.log(`[whisper] "${text.substring(0, 80)}${text.length > 80 ? '...' : ''}"`);
       res.json({ text });

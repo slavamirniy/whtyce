@@ -181,6 +181,9 @@ function startServer(config) {
         });
     }
     loadWhisper();
+    function stripTimestamps(text) {
+        return text.replace(/\[\d{2}:\d{2}:\d{2}\.\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}\.\d{3}\]\s*/g, '').trim();
+    }
     async function transcribeAudio(wavPath) {
         const { nodewhisper } = await Promise.resolve().then(() => __importStar(require('nodejs-whisper')));
         const result = await nodewhisper(wavPath, {
@@ -188,7 +191,7 @@ function startServer(config) {
             whisperOptions: { outputInText: true },
             logger: { debug: () => { }, error: console.error, log: () => { } },
         });
-        return result?.trim() || '';
+        return stripTimestamps(result || '');
     }
     // --- Tmux ---
     function ensureTmuxSession() {
@@ -452,7 +455,7 @@ function startServer(config) {
                 whisperOptions: { outputInText: true },
                 logger: { debug: () => { }, error: console.error, log: () => { } },
             });
-            const text = result?.trim() || '';
+            const text = stripTimestamps(result || '');
             try {
                 fs_1.default.unlinkSync(wavPath);
             }
