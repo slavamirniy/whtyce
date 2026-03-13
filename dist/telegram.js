@@ -16,6 +16,17 @@ const BOT_COMMANDS = new Set([
 function stripAnsi(str) {
     return str.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/\x1b\][^\x07]*\x07/g, '');
 }
+function extractUrls(text) {
+    const urlRegex = /https?:\/\/[^\s"'<>\])}]+/g;
+    const urls = new Set();
+    let match;
+    while ((match = urlRegex.exec(text)) !== null) {
+        // Trim trailing punctuation that's likely not part of the URL
+        let url = match[0].replace(/[.,;:!?]+$/, '');
+        urls.add(url);
+    }
+    return urls;
+}
 function capturePaneText(session) {
     try {
         return (0, child_process_1.execSync)(`tmux capture-pane -t ${session} -p`, {
@@ -413,6 +424,7 @@ class TmateTelegramBot {
                 threadId: null,
                 screenMsgId: null,
                 lastContent: '',
+                linkMsgIds: new Map(),
             });
             await this.sendNewScreenshot(this.activeSession);
             this.startContentPolling();
@@ -440,6 +452,7 @@ class TmateTelegramBot {
                     threadId: topic.message_thread_id,
                     screenMsgId: null,
                     lastContent: '',
+                    linkMsgIds: new Map(),
                 });
                 await this.sendSessionPreview(name);
                 this.persistThreadIds();
@@ -491,6 +504,7 @@ class TmateTelegramBot {
                 threadId: topic.message_thread_id,
                 screenMsgId: null,
                 lastContent: '',
+                linkMsgIds: new Map(),
             });
             await this.sendSessionPreview(name);
             this.persistThreadIds();
@@ -649,6 +663,10 @@ class TmateTelegramBot {
                 return;
             }
             state.lastContent = text;
+            // Sync links in terminal with Telegram messages
+            this.syncLinks(sessionName, text).catch((err) => {
+                console.error('[telegram] Link sync error:', err.message);
+            });
             const chatId = this.authorizedChat;
             const imgBuf = renderTerminalImage(text);
             if (state.screenMsgId) {
@@ -684,6 +702,35 @@ class TmateTelegramBot {
         }
         finally {
             this.updating = false;
+        }
+    }
+    async syncLinks(sessionName, text) {
+        const state = this.sessions.get(sessionName);
+        if (!state || !this.authorizedChat)
+            return;
+        const chatId = this.authorizedChat;
+        const currentUrls = extractUrls(text);
+        // Delete messages for URLs that are no longer in the terminal
+        for (const [url, msgId] of state.linkMsgIds) {
+            if (!currentUrls.has(url)) {
+                this.bot.deleteMessage(chatId, msgId).catch(() => { });
+                state.linkMsgIds.delete(url);
+            }
+        }
+        // Send messages for new URLs
+        for (const url of currentUrls) {
+            if (state.linkMsgIds.has(url))
+                continue;
+            try {
+                const sendOpts = { disable_web_page_preview: false };
+                if (state.threadId)
+                    sendOpts.message_thread_id = state.threadId;
+                const sent = await this.bot.sendMessage(chatId, url, sendOpts);
+                state.linkMsgIds.set(url, sent.message_id);
+            }
+            catch (err) {
+                console.error(`[telegram] Failed to send link ${url}:`, err.message);
+            }
         }
     }
     getKeyboard(sessionName) {

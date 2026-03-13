@@ -42,6 +42,7 @@ export declare class TmateTelegramBot {
     private scheduleRender;
     private forceRender;
     private doRender;
+    private syncLinks;
     private getKeyboard;
     private sendNewScreenshot;
     private handleVoice;
