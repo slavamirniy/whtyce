@@ -81,37 +81,11 @@ function startServer(config) {
         if (whisperLoading || whisperReady)
             return;
         whisperLoading = true;
-        console.log(`[whisper] Downloading model "${config.whisperModel}" and building whisper.cpp...`);
+        console.log(`[whisper] Preparing model "${config.whisperModel}"...`);
         try {
-            const { nodewhisper } = await Promise.resolve().then(() => __importStar(require('nodejs-whisper')));
-            // Trigger auto-download + compile by transcribing a silent wav
-            const silentWav = path_1.default.join(os_1.default.tmpdir(), 'whtyce_silence.wav');
-            if (!fs_1.default.existsSync(silentWav)) {
-                // Create minimal 0.1s silent 16kHz mono WAV
-                const sampleRate = 16000;
-                const samples = sampleRate / 10;
-                const buf = Buffer.alloc(44 + samples * 2);
-                buf.write('RIFF', 0);
-                buf.writeUInt32LE(36 + samples * 2, 4);
-                buf.write('WAVE', 8);
-                buf.write('fmt ', 12);
-                buf.writeUInt32LE(16, 16);
-                buf.writeUInt16LE(1, 20);
-                buf.writeUInt16LE(1, 22);
-                buf.writeUInt32LE(sampleRate, 24);
-                buf.writeUInt32LE(sampleRate * 2, 28);
-                buf.writeUInt16LE(2, 32);
-                buf.writeUInt16LE(16, 34);
-                buf.write('data', 36);
-                buf.writeUInt32LE(samples * 2, 40);
-                fs_1.default.writeFileSync(silentWav, buf);
-            }
-            await nodewhisper(silentWav, {
-                modelName: config.whisperModel,
-                autoDownloadModelName: config.whisperModel,
-                whisperOptions: { outputInText: true },
-                logger: { debug: () => { }, error: console.error, log: console.log },
-            });
+            // Import autoDownloadModel directly to download + compile without transcribing
+            const autoDownload = (await Promise.resolve().then(() => __importStar(require('nodejs-whisper/dist/autoDownloadModel')))).default;
+            await autoDownload(console, config.whisperModel);
             whisperReady = true;
             console.log('[whisper] Ready');
         }
