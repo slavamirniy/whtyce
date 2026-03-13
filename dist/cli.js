@@ -97,7 +97,7 @@ async function main() {
         tgUserId: args.tgUser
             ? parseInt(args.tgUser, 10)
             : (saved.tgUserId || (process.env.TG_USER_ID ? parseInt(process.env.TG_USER_ID, 10) : 0)),
-        whisperEnabled: args.noWhisper ? false : (saved.whisperEnabled !== undefined ? saved.whisperEnabled : true),
+        whisperEnabled: args.noWhisper ? false : (saved.whisperEnabled !== undefined ? saved.whisperEnabled : false),
         whisperModel: saved.whisperModel || process.env.WHISPER_MODEL || 'Xenova/whisper-small',
         tmuxSession: saved.tmuxSession || process.env.TMUX_SESSION || 'whtyce',
         threadsEnabled: args.threads ? true : (saved.threadsEnabled || false),
