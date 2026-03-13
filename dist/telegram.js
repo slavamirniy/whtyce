@@ -34,7 +34,11 @@ const IMG_FONT_SIZE = 18;
 const IMG_LINE_HEIGHT = 22;
 const IMG_PADDING_X = Math.round(IMG_WIDTH * 0.05); // 5% = 34px
 const IMG_PADDING_Y = Math.round(IMG_HEIGHT * 0.05); // 5% = 52px
-const IMG_CHAR_WIDTH = 10.8;
+// Measure actual char width from the font
+const _measureCanvas = (0, canvas_1.createCanvas)(100, 100);
+const _measureCtx = _measureCanvas.getContext('2d');
+_measureCtx.font = `${IMG_FONT_SIZE}px "Courier New", "Liberation Mono", monospace`;
+const IMG_CHAR_WIDTH = _measureCtx.measureText('M').width;
 // Calculated terminal dimensions that fit the image (respecting padding on ALL sides)
 const TERM_COLS = Math.floor((IMG_WIDTH - IMG_PADDING_X * 2) / IMG_CHAR_WIDTH);
 const TERM_ROWS = Math.floor((IMG_HEIGHT - IMG_PADDING_Y * 2) / IMG_LINE_HEIGHT);
@@ -43,15 +47,20 @@ function renderTerminalImage(text) {
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = '#1a1a2e';
     ctx.fillRect(0, 0, IMG_WIDTH, IMG_HEIGHT);
+    // Clip to content area so nothing bleeds past padding
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(IMG_PADDING_X, IMG_PADDING_Y, IMG_WIDTH - IMG_PADDING_X * 2, IMG_HEIGHT - IMG_PADDING_Y * 2);
+    ctx.clip();
     ctx.font = `${IMG_FONT_SIZE}px "Courier New", "Liberation Mono", monospace`;
     ctx.fillStyle = '#e0e0e0';
     ctx.textBaseline = 'top';
     const lines = text.split('\n');
     for (let i = 0; i < Math.min(lines.length, TERM_ROWS); i++) {
-        // Clip line to TERM_COLS to prevent overflow past right padding
         const line = lines[i].length > TERM_COLS ? lines[i].slice(0, TERM_COLS) : lines[i];
         ctx.fillText(line, IMG_PADDING_X, IMG_PADDING_Y + i * IMG_LINE_HEIGHT);
     }
+    ctx.restore();
     return canvas.toBuffer('image/png');
 }
 function generateCode() {
