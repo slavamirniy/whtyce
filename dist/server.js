@@ -81,11 +81,33 @@ function startServer(config) {
         if (whisperLoading || whisperReady)
             return;
         whisperLoading = true;
-        console.log(`[whisper] Preparing model "${config.whisperModel}"...`);
         try {
-            // Import autoDownloadModel directly to download + compile without transcribing
-            const autoDownload = (await Promise.resolve().then(() => __importStar(require('nodejs-whisper/dist/autoDownloadModel')))).default;
-            await autoDownload(console, config.whisperModel);
+            const constants = await Promise.resolve().then(() => __importStar(require('nodejs-whisper/dist/constants')));
+            const whisperCppPath = constants.WHISPER_CPP_PATH;
+            const modelFile = constants.MODEL_OBJECT[config.whisperModel];
+            if (!modelFile)
+                throw new Error(`Unknown model: ${config.whisperModel}`);
+            const modelsDir = path_1.default.join(whisperCppPath, 'models');
+            const modelPath = path_1.default.join(modelsDir, modelFile);
+            const execPath = path_1.default.join(whisperCppPath, 'build', 'bin', 'whisper-cli');
+            // Step 1: Download model if needed
+            if (!fs_1.default.existsSync(modelPath)) {
+                const url = `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/${modelFile}`;
+                console.log(`[whisper] Downloading ${config.whisperModel} model...`);
+                await downloadWithProgress(url, modelPath);
+            }
+            else {
+                console.log(`[whisper] Model "${config.whisperModel}" already downloaded`);
+            }
+            // Step 2: Build whisper.cpp if needed
+            if (!fs_1.default.existsSync(execPath)) {
+                console.log('[whisper] Building whisper.cpp...');
+                await runWithProgress('cmake', ['-B', 'build'], whisperCppPath, 'Configuring');
+                await runWithProgress('cmake', ['--build', 'build', '--config', 'Release'], whisperCppPath, 'Compiling');
+            }
+            else {
+                console.log('[whisper] whisper.cpp already built');
+            }
             whisperReady = true;
             console.log('[whisper] Ready');
         }
@@ -93,6 +115,70 @@ function startServer(config) {
             console.error('[whisper] Failed to load:', err.message);
             whisperLoading = false;
         }
+    }
+    async function downloadWithProgress(url, dest) {
+        const resp = await fetch(url, { redirect: 'follow' });
+        if (!resp.ok)
+            throw new Error(`Download failed: ${resp.status}`);
+        const total = parseInt(resp.headers.get('content-length') || '0', 10);
+        const dir = path_1.default.dirname(dest);
+        if (!fs_1.default.existsSync(dir))
+            fs_1.default.mkdirSync(dir, { recursive: true });
+        const fileStream = fs_1.default.createWriteStream(dest + '.tmp');
+        const reader = resp.body;
+        let downloaded = 0;
+        let lastLog = 0;
+        for await (const chunk of reader) {
+            fileStream.write(chunk);
+            downloaded += chunk.length;
+            const now = Date.now();
+            if (total && now - lastLog > 1000) {
+                const pct = Math.round(downloaded / total * 100);
+                const mb = (downloaded / 1024 / 1024).toFixed(1);
+                const totalMb = (total / 1024 / 1024).toFixed(1);
+                process.stdout.write(`\r[whisper] Downloading... ${pct}% (${mb}/${totalMb} MB)`);
+                lastLog = now;
+            }
+        }
+        fileStream.end();
+        await new Promise((resolve, reject) => {
+            fileStream.on('finish', resolve);
+            fileStream.on('error', reject);
+        });
+        fs_1.default.renameSync(dest + '.tmp', dest);
+        if (total)
+            console.log(`\r[whisper] Downloaded ${(total / 1024 / 1024).toFixed(1)} MB`);
+    }
+    function runWithProgress(cmd, args, cwd, label) {
+        return new Promise((resolve, reject) => {
+            const proc = (0, child_process_1.spawn)(cmd, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+            let lastLog = 0;
+            let lines = 0;
+            const onData = (data) => {
+                const text = data.toString();
+                lines += text.split('\n').length - 1;
+                const now = Date.now();
+                // Parse cmake build progress like [  5%]
+                const pctMatch = text.match(/\[\s*(\d+)%\]/);
+                if (pctMatch) {
+                    process.stdout.write(`\r[whisper] ${label}... ${pctMatch[1]}%`);
+                }
+                else if (now - lastLog > 2000) {
+                    process.stdout.write(`\r[whisper] ${label}...`);
+                    lastLog = now;
+                }
+            };
+            proc.stdout?.on('data', onData);
+            proc.stderr?.on('data', onData);
+            proc.on('close', (code) => {
+                process.stdout.write('\n');
+                if (code === 0)
+                    resolve();
+                else
+                    reject(new Error(`${cmd} exited with code ${code}`));
+            });
+            proc.on('error', reject);
+        });
     }
     loadWhisper();
     async function transcribeAudio(wavPath) {
