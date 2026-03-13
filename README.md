@@ -1,78 +1,81 @@
 # whtyce
 
-Mobile terminal with voice input. Run a command, get a link, control your server from your phone.
+Mobile terminal with voice input. Run one command — get a link, control your server from your phone.
 
-## Install
+## Quick Install
 
 ```bash
-# System deps
-apt install -y tmux ffmpeg build-essential python3 libcairo2-dev libjpeg-dev libpango1.0-dev libgif-dev librsvg2-dev libvips-dev
+curl -fsSL https://raw.githubusercontent.com/slavamirniy/whtyce/master/install.sh | bash
+```
 
-# Install whtyce
-npm install -g https://github.com/slavamirniy/whtyce/releases/download/v1.0.0/whtyce-1.0.0.tgz
+This installs everything (Node.js, tmux, cmake, ffmpeg, whisper) and starts whtyce.
+
+### Manual install
+
+```bash
+npm install -g https://github.com/slavamirniy/whtyce/releases/download/v1.1.0/whtyce-1.1.0.tgz
 ```
 
 ## Usage
 
 ```bash
-whtyce
+whtyce                # start in background, print URL
+whtyce stop           # stop
+whtyce logs           # show daemon logs
+whtyce install        # install/check all dependencies + whisper model
+whtyce --no-whisper   # start without voice input
 ```
-
-That's it. It finds a free port, starts the server, and prints the URL.
 
 ### Options
 
 ```
--p, --port <port>       Port (default: auto-find free port)
--s, --secret <secret>   URL secret (default: random)
+-p, --port <port>       Port (default: auto)
+-s, --secret <secret>   URL secret (default: random, saved between restarts)
 -t, --tg-token <token>  Telegram bot token
--u, --tg-user <id>      Telegram user ID (auto-authorize, skip code)
---no-whisper             Disable Whisper voice model (saves ~400MB RAM)
--h, --help              Show help
+-u, --tg-user <id>      Telegram user ID (skip auth code)
+--threads               Enable Telegram forum topics
+--no-whisper            Disable voice input
 ```
 
-### Example
+### Examples
 
 ```bash
-# Basic — just get a link
+# Just get a link
 whtyce
 
 # With Telegram bot
 whtyce -t 123456789:ABCdefGHIjklMNOpqrsTUVwxyz
 
-# Full setup — auto-authorize your Telegram, no whisper
-whtyce -t 123456789:ABC... -u 87654321 --no-whisper
+# Full setup
+whtyce -t 123456789:ABC... -u 87654321 --threads
 
-# Fixed port
-whtyce -p 3000
+# Fixed port, no whisper
+whtyce -p 3000 --no-whisper
 ```
-
-When you stop whtyce (Ctrl+C), it prints the command to restart with the same settings.
 
 ## Features
 
-- **Mobile-first web terminal** — xterm.js with touch-friendly UI, quick keys bar
-- **Voice input** — Whisper speech-to-text, record from browser, preview before sending
+- **Background daemon** — starts detached, survives terminal close
+- **Mobile-first web terminal** — touch-friendly UI with quick keys bar
+- **Voice input** — Whisper (whisper.cpp) speech-to-text, enabled by default
 - **Telegram bot** — control terminal from Telegram:
-  - Send text messages — typed into terminal + Enter
-  - Send voice messages — transcribed and typed
-  - One persistent screenshot message that updates in-place (no spam)
+  - Text messages typed into terminal + Enter
+  - Voice messages transcribed and typed
+  - Live screenshot that updates in-place
   - Inline buttons: Refresh, Enter, Ctrl+C, Up, Down
-  - User messages are auto-deleted to keep chat clean
-  - One connection per session
-- **Setup from web UI** — paste Telegram bot token in settings, get a code, click deep link to open bot
-- **Auto-port** — finds a free port automatically
-- **Crash-resistant** — uncaught exceptions don't kill the process
-- **URL auth** — session protected by secret token in URL
-- **Clean shutdown** — tmux session killed on exit
+  - Forum topics mode (`--threads`)
+- **Auto-everything** — free port, saved secrets, auto-install deps
+- **Settings UI** — configure Telegram bot token from the web page
+- **URL auth** — session protected by secret in URL
 
-## Requirements
+## Config
 
-- **Node.js 18+**
-- **tmux**
-- **ffmpeg** — for Telegram voice messages
-- **System libs** — `build-essential python3 libcairo2-dev libjpeg-dev libpango1.0-dev libgif-dev librsvg2-dev libvips-dev` (for canvas + sharp)
+Settings saved to `~/.whtyce/config.json`. Clean with:
+
+```bash
+rm -rf ~/.whtyce
+```
 
 ## How it works
 
-whtyce creates a tmux session and streams it to a web page via WebSocket. Input from the browser (keyboard, touch, voice) is sent back to tmux. The Telegram bot renders terminal screenshots as images and sends them to your chat.
+whtyce creates a tmux session and streams it to a web page via WebSocket. Input from the browser (keyboard, touch, voice) goes back to tmux. The Telegram bot renders terminal screenshots as images using canvas.
